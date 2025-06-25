@@ -96,10 +96,11 @@ def create_payment():
                     instructions = "To be redirected to Innbucks, check return URL or follow the app instructions."
                 else:
                     instructions = f"Payment initiated via {method.upper()}. Please check your phone for payment instructions."
-            
-            # If there's a redirect URL, append it to instructions
-            if hasattr(response, 'redirect_url') and response.redirect_url:
-                instructions += f"\n\nAlternatively, complete payment at: {response.redirect_url}"
+              # If there's a redirect URL, append it to instructions
+            if hasattr(response, 'redirect_url') and response.redirect_url and str(response.redirect_url) != "<class 'str'>":
+                redirect_url = str(response.redirect_url)
+                if redirect_url and redirect_url != "<class 'str'>":
+                    instructions += f"\n\nAlternatively, complete payment at: {redirect_url}"
             
             print(f"Final instructions: {instructions}")
               # Store transaction details
@@ -126,7 +127,7 @@ def create_payment():
                 "message": "Payment request sent successfully",
                 # Additional essential Paynow data
                 "paynow_reference": response.data.get('paynowreference', '') if response.data else '',
-                "redirect_url": str(response.redirect_url) if hasattr(response, 'redirect_url') and response.redirect_url else '',
+                "redirect_url": str(response.redirect_url) if (hasattr(response, 'redirect_url') and response.redirect_url and str(response.redirect_url) != "<class 'str'>") else '',
                 "has_redirect": getattr(response, 'has_redirect', False),
                 "hash": response.data.get('hash', '') if response.data else '',
                 "paynow_status": response.data.get('status', '') if response.data else ''
