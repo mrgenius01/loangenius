@@ -7,11 +7,10 @@ services:
     startCommand: python app.py
     envVars:
       - key: PAYNOW_INTEGRATION_ID
-        sync: false
+        value: ${PAYNOW_INTEGRATION_ID}  # sync through Render UI or secret
       - key: PAYNOW_INTEGRATION_KEY
-        sync: false
+        value: ${PAYNOW_INTEGRATION_KEY}
       - key: RETURN_URL
         value: https://your-frontend-url.com/payment/return
       - key: RESULT_URL
-        generateValue: true
         value: https://loan-repayment-backend.onrender.com/paynow/result
