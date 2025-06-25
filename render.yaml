@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: loan-repayment-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PAYNOW_INTEGRATION_ID
+        sync: false
+      - key: PAYNOW_INTEGRATION_KEY
+        sync: false
+      - key: RETURN_URL
+        value: https://your-frontend-url.com/payment/return
+      - key: RESULT_URL
+        generateValue: true
+        value: https://loan-repayment-backend.onrender.com/paynow/result
