@@ -68,7 +68,8 @@ def create_payment():
           required:
             - phoneNumber
             - amount
-            - method          properties:
+            - method
+          properties:
             phoneNumber:
               type: string
               example: "0771234567"
