@@ -114,10 +114,11 @@ def create_payment():
         
         # Generate unique reference
         reference = f"LOAN_{uuid.uuid4().hex[:8].upper()}"
-        
-        # Create payment
+          # Create payment
         payment = paynow.create_payment(reference, f"loan-user@{phone_number}")
-        payment.add('Loan Repayment', amount)        # Send payment based on method
+        payment.add('Loan Repayment', amount)
+        
+        # Send payment based on method
         if method == 'ecocash':
             response = paynow.send_mobile(payment, phone_number, 'ecocash')
         elif method == 'innbucks':
@@ -137,9 +138,10 @@ def create_payment():
             # Debug: Print response attributes to understand structure
             print(f"Paynow response attributes: {dir(response)}")
             print(f"Response.instructions type: {type(response.instructions)}")
-            print(f"Response.instructions value: {repr(response.instructions)}")
+            print(f"Response.instructions value: {repr(response.instructions)}")            
             print(f"Response.data: {response.data}")
-              # Handle OMari Express Checkout flow
+            
+            # Handle OMari Express Checkout flow
             remoteotpurl = None
             otpreference = None
             redirect_url = None
@@ -169,12 +171,12 @@ def create_payment():
                     instructions = response.data.get('instructions', '')
                     if not instructions:
                         instructions = response.data.get('message', '')
-            
-            # If still no instructions, check if there's redirect info that can help
+              # If still no instructions, check if there's redirect info that can help
             if not instructions and hasattr(response, 'has_redirect') and response.has_redirect:
                 if hasattr(response, 'redirect_url') and response.redirect_url:
                     instructions = f"Please complete payment by visiting: {response.redirect_url}"
-              # If still no instructions, provide method-specific default messages
+            
+            # If still no instructions, provide method-specific default messages
             if not instructions:
                 if method.lower() == 'ecocash':
                     instructions = "Dial *151# on your EcoCash registered line and follow the prompts to complete payment."
@@ -196,7 +198,9 @@ def create_payment():
                 if redirect_url and redirect_url != "<class 'str'>":
                     instructions += f"\n\nAlternatively, complete payment at: {redirect_url}"
             
-            print(f"Final instructions: {instructions}")            # Store transaction details
+            print(f"Final instructions: {instructions}")
+            
+            # Store transaction details
             transactions[reference] = {
                 'reference': reference,
                 'phone_number': phone_number,
@@ -204,7 +208,8 @@ def create_payment():
                 'method': method,
                 'poll_url': str(response.poll_url) if response.poll_url else '',
                 'status': 'pending',
-                'created_at': datetime.now().isoformat(),                'instructions': instructions,
+                'created_at': datetime.now().isoformat(),
+                'instructions': instructions,
                 'paynow_reference': response.data.get('paynowreference', '') if response.data else '',
                 'hash': response.data.get('hash', '') if response.data else '',
                 'redirect_url': redirect_url or (response.redirect_url if hasattr(response, 'redirect_url') and response.redirect_url else ''),
@@ -218,7 +223,8 @@ def create_payment():
                 "status": "success",
                 "reference": reference,
                 "poll_url": str(response.poll_url) if response.poll_url else '',
-                "instructions": instructions,                "message": "Payment request sent successfully",
+                "instructions": instructions,
+                "message": "Payment request sent successfully",
                 # Additional essential Paynow data
                 "paynow_reference": response.data.get('paynowreference', '') if response.data else '',
                 "redirect_url": redirect_url or (str(response.redirect_url) if (hasattr(response, 'redirect_url') and response.redirect_url and str(response.redirect_url) != "<class 'str'>") else ''),
@@ -453,7 +459,8 @@ def create_test_payment():
               example: "25.00"
               description: Payment amount in USD
             method:
-              type: string              enum: ["ecocash","innbucks","omari"]
+              type: string
+              enum: ["ecocash","innbucks","omari"]
               example: "ecocash"
               description: Payment method
     responses:
