@@ -68,8 +68,7 @@ def create_payment():
           required:
             - phoneNumber
             - amount
-            - method
-          properties:
+            - method          properties:
             phoneNumber:
               type: string
               example: "0771234567"
@@ -78,7 +77,7 @@ def create_payment():
               example: "50.00"
             method:
               type: string
-              enum: ["ecocash","innbucks"]
+              enum: ["ecocash","innbucks","omari"]
               example: "ecocash"
     responses:
       200:
@@ -117,21 +116,46 @@ def create_payment():
         
         # Create payment
         payment = paynow.create_payment(reference, f"loan-user@{phone_number}")
-        payment.add('Loan Repayment', amount)
-        
-        # Send mobile payment based on method
+        payment.add('Loan Repayment', amount)        # Send payment based on method
         if method == 'ecocash':
             response = paynow.send_mobile(payment, phone_number, 'ecocash')
         elif method == 'innbucks':
             # Note: Check if Paynow supports innbucks or use 'onemoney'
             response = paynow.send_mobile(payment, phone_number, 'onemoney')
+        elif method == 'omari':
+            # OMari uses Express Checkout, not mobile payments
+            response = paynow.send_mobile(payment, phone_number, 'omari')
+            # If mobile doesn't work, try express checkout
+            if not response.success:
+                print("Mobile OMari failed, trying Express Checkout...")
+                response = paynow.create_checkout(payment)
         else:
-            return jsonify({"error": "Unsupported payment method"}), 400            
+            return jsonify({"error": "Unsupported payment method. Supported: ecocash, innbucks, omari"}), 400
+            
         if response.success:
             # Debug: Print response attributes to understand structure
             print(f"Paynow response attributes: {dir(response)}")
             print(f"Response.instructions type: {type(response.instructions)}")
             print(f"Response.instructions value: {repr(response.instructions)}")
+            print(f"Response.data: {response.data}")
+              # Handle OMari Express Checkout flow
+            remoteotpurl = None
+            otpreference = None
+            redirect_url = None
+            
+            if method == 'omari' and response.data:
+                # For mobile OMari, check for OTP fields
+                remoteotpurl = response.data.get('remoteotpurl', '')
+                otpreference = response.data.get('otpreference', '')
+                
+                # For Express Checkout, get redirect URL
+                if hasattr(response, 'redirect_url') and response.redirect_url:
+                    redirect_url = str(response.redirect_url)
+                    print(f"OMari Express Checkout URL: {redirect_url}")
+                
+                print(f"OMari OTP URL: {remoteotpurl}")
+                print(f"OMari OTP Reference: {otpreference}")
+                print(f"OMari Redirect URL: {redirect_url}")
             
             # Since instructions is returning <class 'str'> instead of actual content,
             # let's check other possible sources of instructions
@@ -139,33 +163,39 @@ def create_payment():
             
             # Check if there's actual instruction data in other attributes
             if hasattr(response, 'data') and response.data:
-                print(f"Response.data: {response.data}")
                 # Check if data contains instructions
                 if isinstance(response.data, dict):
                     instructions = response.data.get('instructions', '')
                     if not instructions:
                         instructions = response.data.get('message', '')
-              # If still no instructions, check if there's redirect info that can help
+            
+            # If still no instructions, check if there's redirect info that can help
             if not instructions and hasattr(response, 'has_redirect') and response.has_redirect:
                 if hasattr(response, 'redirect_url') and response.redirect_url:
                     instructions = f"Please complete payment by visiting: {response.redirect_url}"
-            
-            # If still no instructions, provide method-specific default messages
+              # If still no instructions, provide method-specific default messages
             if not instructions:
                 if method.lower() == 'ecocash':
                     instructions = "Dial *151# on your EcoCash registered line and follow the prompts to complete payment."
                 elif method.lower() == 'innbucks':
                     instructions = "Check your phone for payment instructions."
+                elif method.lower() == 'omari':
+                    if redirect_url:
+                        instructions = f"Please visit the payment URL to complete your OMari payment: {redirect_url}"
+                    elif remoteotpurl:
+                        instructions = f"Please visit the OTP URL to complete your OMari payment. OTP Reference: {otpreference}"
+                    else:
+                        instructions = "Payment initiated via OMari. Please check your phone for payment instructions."
                 else:
                     instructions = f"Payment initiated via {method.upper()}. Please check your phone for payment instructions."
-              # If there's a redirect URL, append it to instructions
+            
+            # If there's a redirect URL, append it to instructions
             if hasattr(response, 'redirect_url') and response.redirect_url and str(response.redirect_url) != "<class 'str'>":
                 redirect_url = str(response.redirect_url)
                 if redirect_url and redirect_url != "<class 'str'>":
                     instructions += f"\n\nAlternatively, complete payment at: {redirect_url}"
             
-            print(f"Final instructions: {instructions}")
-              # Store transaction details
+            print(f"Final instructions: {instructions}")            # Store transaction details
             transactions[reference] = {
                 'reference': reference,
                 'phone_number': phone_number,
@@ -173,26 +203,30 @@ def create_payment():
                 'method': method,
                 'poll_url': str(response.poll_url) if response.poll_url else '',
                 'status': 'pending',
-                'created_at': datetime.now().isoformat(),
-                'instructions': instructions,
+                'created_at': datetime.now().isoformat(),                'instructions': instructions,
                 'paynow_reference': response.data.get('paynowreference', '') if response.data else '',
                 'hash': response.data.get('hash', '') if response.data else '',
-                'redirect_url': response.redirect_url if hasattr(response, 'redirect_url') and response.redirect_url else '',
-                'has_redirect': getattr(response, 'has_redirect', False)
+                'redirect_url': redirect_url or (response.redirect_url if hasattr(response, 'redirect_url') and response.redirect_url else ''),
+                'has_redirect': getattr(response, 'has_redirect', False),
+                # OMari-specific fields
+                'remoteotpurl': remoteotpurl if method == 'omari' else None,
+                'otpreference': otpreference if method == 'omari' else None
             }
             
             return jsonify({
                 "status": "success",
                 "reference": reference,
                 "poll_url": str(response.poll_url) if response.poll_url else '',
-                "instructions": instructions,
-                "message": "Payment request sent successfully",
+                "instructions": instructions,                "message": "Payment request sent successfully",
                 # Additional essential Paynow data
                 "paynow_reference": response.data.get('paynowreference', '') if response.data else '',
-                "redirect_url": str(response.redirect_url) if (hasattr(response, 'redirect_url') and response.redirect_url and str(response.redirect_url) != "<class 'str'>") else '',
+                "redirect_url": redirect_url or (str(response.redirect_url) if (hasattr(response, 'redirect_url') and response.redirect_url and str(response.redirect_url) != "<class 'str'>") else ''),
                 "has_redirect": getattr(response, 'has_redirect', False),
                 "hash": response.data.get('hash', '') if response.data else '',
-                "paynow_status": response.data.get('status', '') if response.data else ''
+                "paynow_status": response.data.get('status', '') if response.data else '',
+                # OMari-specific fields
+                "remoteotpurl": remoteotpurl if method == 'omari' else None,
+                "otpreference": otpreference if method == 'omari' else None
             }), 200
         else:
             # Log detailed error information for debugging
@@ -418,8 +452,7 @@ def create_test_payment():
               example: "25.00"
               description: Payment amount in USD
             method:
-              type: string
-              enum: ["ecocash","innbucks"]
+              type: string              enum: ["ecocash","innbucks","omari"]
               example: "ecocash"
               description: Payment method
     responses:
@@ -467,12 +500,11 @@ def create_test_payment():
         phone_number = data['phoneNumber']
         amount = float(data['amount'])
         method = data['method'].lower()
-        
-        # Generate unique reference
+          # Generate unique reference
         reference = f"TEST_{uuid.uuid4().hex[:8].upper()}"
         
-        # Create mock transaction
-        transactions[reference] = {
+        # Create mock transaction with OMari-specific fields for testing
+        transaction_data = {
             'reference': reference,
             'phone_number': phone_number,
             'amount': amount,
@@ -484,14 +516,28 @@ def create_test_payment():
             'is_test': True
         }
         
-        return jsonify({
+        # Add OMari-specific mock data
+        if method == 'omari':
+            transaction_data['remoteotpurl'] = f'https://mock-omari-otp.com/pay/{reference}'
+            transaction_data['otpreference'] = f'OTP_{reference}'
+        
+        transactions[reference] = transaction_data
+        
+        response_data = {
             "status": "success",
             "reference": reference,
             "poll_url": f'http://localhost:5000/mock/poll/{reference}',
             "instructions": f'TEST: Send ${amount} via {method.upper()} to {phone_number}',
             "message": "Test payment request created successfully",
             "note": "This is a test transaction - no real payment will be processed"
-        }), 200
+        }
+        
+        # Add OMari-specific response data
+        if method == 'omari':
+            response_data['remoteotpurl'] = transaction_data['remoteotpurl']
+            response_data['otpreference'] = transaction_data['otpreference']
+        
+        return jsonify(response_data), 200
             
     except ValueError as e:
         return jsonify({"error": "Invalid amount format"}), 400
