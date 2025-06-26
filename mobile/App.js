@@ -9,7 +9,7 @@ const MOCK_CREDENTIALS = {
 };
 
 // For Android Emulator, use 10.0.2.2 to access host machine's localhost
-const API_BASE_URL = 'http://10.0.26.142:5000';
+const API_BASE_URL = 'http://192.168.137.1:5000';
 // Alternative: Use your computer's IP address (find with 'ipconfig' command)
 // const API_BASE_URL = 'http://192.168.1.100:5000'; // Replace with your actual IP
 
@@ -111,6 +111,7 @@ const DashboardScreen = ({ onLogout }) => {
   const paymentMethods = [
     { key: 'ecocash', label: 'EcoCash', color: '#10ac84' },
     { key: 'innbucks', label: 'InnBucks', color: '#3742fa' },
+    {key: 'omari', label: 'OMari', color:'#3956fa'}
   ];
 
   // Test API connection
@@ -143,7 +144,7 @@ const DashboardScreen = ({ onLogout }) => {
 
     try {
       // First try the test endpoint for debugging
-      const response = await axios.post(`${API_BASE_URL}/payment`, {
+      const response = await axios.post(`${API_BASE_URL}/payment/test`, {
         phoneNumber,
         amount,
         method: selectedMethod

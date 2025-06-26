@@ -5,12 +5,14 @@ import os
 from datetime import datetime
 import uuid
 from dotenv import load_dotenv
+from flasgger import Swagger
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React Native app
+Swagger(app)
 
 # Paynow configuration
 PAYNOW_INTEGRATION_ID = os.getenv('PAYNOW_INTEGRATION_ID', 'YOUR_INTEGRATION_ID')
@@ -31,12 +33,72 @@ transactions = {}
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """
+    Health check endpoint
+    ---
+    tags:
+      - System
+    responses:
+      200:
+        description: System is healthy
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: "healthy"
+            timestamp:
+              type: string
+              example: "2025-06-25T10:30:00.123456"
+    """
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
 @app.route('/payment', methods=['POST'])
 def create_payment():
-    """Create a payment request"""
+    """
+    Create a payment request
+    ---
+    tags:
+      - Payment
+    parameters:
+      - in: body
+        name: payload
+        schema:
+          type: object
+          required:
+            - phoneNumber
+            - amount
+            - method
+          properties:
+            phoneNumber:
+              type: string
+              example: "0771234567"
+            amount:
+              type: string
+              example: "50.00"
+            method:
+              type: string
+              enum: ["ecocash","innbucks"]
+              example: "ecocash"
+    responses:
+      200:
+        description: Payment initiated
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: "success"
+            reference:
+              type: string
+              example: "LOAN_ABC123"
+            poll_url:
+              type: string
+            instructions:
+              type: string
+      400:
+        description: Bad request
+    """
     try:
         data = request.get_json()
         
@@ -93,7 +155,7 @@ def create_payment():
                 if method.lower() == 'ecocash':
                     instructions = "Dial *151# on your EcoCash registered line and follow the prompts to complete payment."
                 elif method.lower() == 'innbucks':
-                    instructions = "To be redirected to Innbucks, check return URL or follow the app instructions."
+                    instructions = "Check your phone for payment instructions."
                 else:
                     instructions = f"Payment initiated via {method.upper()}. Please check your phone for payment instructions."
               # If there's a redirect URL, append it to instructions
@@ -161,7 +223,51 @@ def create_payment():
 
 @app.route('/payment/status/<reference>', methods=['GET'])
 def check_payment_status(reference):
-    """Check payment status"""
+    """
+    Check payment status
+    ---
+    tags:
+      - Payment
+    parameters:
+      - in: path
+        name: reference
+        type: string
+        required: true
+        description: Payment reference ID
+        example: "LOAN_ABC123"
+    responses:
+      200:
+        description: Payment status retrieved
+        schema:
+          type: object
+          properties:
+            reference:
+              type: string
+              example: "LOAN_ABC123"
+            status:
+              type: string
+              example: "paid"
+            paid:
+              type: boolean
+              example: true
+            amount:
+              type: number
+              example: 50.0
+            method:
+              type: string
+              example: "ecocash"
+            created_at:
+              type: string
+              example: "2025-06-25T10:30:00.123456"
+      404:
+        description: Transaction not found
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Transaction not found"
+    """
     try:
         if reference not in transactions:
             return jsonify({"error": "Transaction not found"}), 404
@@ -194,7 +300,40 @@ def check_payment_status(reference):
 
 @app.route('/paynow/result', methods=['POST'])
 def paynow_result():
-    """Handle Paynow result callback"""
+    """
+    Handle Paynow result callback
+    ---
+    tags:
+      - Webhooks
+    parameters:
+      - in: formData
+        name: reference
+        type: string
+        description: Payment reference
+      - in: formData
+        name: paynowreference
+        type: string
+        description: Paynow internal reference
+      - in: formData
+        name: amount
+        type: string
+        description: Payment amount
+      - in: formData
+        name: status
+        type: string
+        description: Payment status
+    responses:
+      200:
+        description: Callback processed successfully
+        schema:
+          type: string
+          example: "OK"
+      500:
+        description: Error processing callback
+        schema:
+          type: string
+          example: "ERROR"
+    """
     try:
         # This endpoint receives payment result from Paynow
         data = request.form.to_dict()
@@ -216,12 +355,106 @@ def paynow_result():
 
 @app.route('/transactions', methods=['GET'])
 def get_transactions():
-    """Get all transactions (for debugging)"""
+    """
+    Get all transactions (for debugging)
+    ---
+    tags:
+      - Debug
+    responses:
+      200:
+        description: List of all transactions
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              reference:
+                type: string
+                example: "LOAN_ABC123"
+              phone_number:
+                type: string
+                example: "0771234567"
+              amount:
+                type: number
+                example: 50.0
+              method:
+                type: string
+                example: "ecocash"
+              status:
+                type: string
+                example: "pending"
+              created_at:
+                type: string
+                example: "2025-06-25T10:30:00.123456"
+              instructions:
+                type: string
+                example: "Dial *151# to complete payment"
+    """
     return jsonify(list(transactions.values())), 200
 
 @app.route('/payment/test', methods=['POST'])
 def create_test_payment():
-    """Create a test payment (no actual Paynow integration)"""
+    """
+    Create a test payment (no actual Paynow integration)
+    ---
+    tags:
+      - Testing
+    parameters:
+      - in: body
+        name: payload
+        schema:
+          type: object
+          required:
+            - phoneNumber
+            - amount
+            - method
+          properties:
+            phoneNumber:
+              type: string
+              example: "0771234567"
+              description: Phone number for payment
+            amount:
+              type: string
+              example: "25.00"
+              description: Payment amount in USD
+            method:
+              type: string
+              enum: ["ecocash","innbucks"]
+              example: "ecocash"
+              description: Payment method
+    responses:
+      200:
+        description: Test payment created successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: "success"
+            reference:
+              type: string
+              example: "TEST_ABC123"
+            poll_url:
+              type: string
+              example: "http://localhost:5000/mock/poll/TEST_ABC123"
+            instructions:
+              type: string
+              example: "TEST: Send $25.00 via ECOCASH to 0771234567"
+            message:
+              type: string
+              example: "Test payment request created successfully"
+            note:
+              type: string
+              example: "This is a test transaction - no real payment will be processed"
+      400:
+        description: Bad request
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Missing required field: phoneNumber"
+    """
     try:
         data = request.get_json()
         
