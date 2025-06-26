@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { SafeAreaView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, StatusBar, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { SafeAreaView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, StatusBar, ScrollView, Modal, Animated, Dimensions, ActivityIndicator, Linking } from 'react-native';
 import axios from 'axios';
 
 // Mock login credentials
@@ -8,10 +8,364 @@ const MOCK_CREDENTIALS = {
   password: 'password123'
 };
 
-// For Android Emulator, use 10.0.2.2 to access host machine's localhost
-const API_BASE_URL = 'http://192.168.137.1:5000';
-// Alternative: Use your computer's IP address (find with 'ipconfig' command)
-// const API_BASE_URL = 'http://192.168.1.100:5000'; // Replace with your actual IP
+// Production backend URL - deployed on Render
+const API_BASE_URL = 'https://loangenius.onrender.com';
+// For local development, use:
+// const API_BASE_URL = 'http://192.168.137.1:5000';
+
+const { width, height } = Dimensions.get('window');
+
+// Custom Modal Component
+const CustomModal = ({ visible, onClose, title, children, type = 'info' }) => {
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [scaleAnim] = useState(new Animated.Value(0.3));
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.3,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  const getModalColor = () => {
+    switch (type) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      case 'warning': return '#f59e0b';
+      case 'info': return '#3b82f6';
+      default: return '#3b82f6';
+    }
+  };
+
+  const getModalIcon = () => {
+    switch (type) {
+      case 'success': return '✅';
+      case 'error': return '❌';
+      case 'warning': return '⚠️';
+      case 'info': return 'ℹ️';
+      default: return 'ℹ️';
+    }
+  };
+
+  return (
+    <Modal transparent visible={visible} animationType="none">
+      <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
+        <Animated.View
+          style={[
+            styles.modalContent,
+            {
+              transform: [{ scale: scaleAnim }],
+              borderTopColor: getModalColor()
+            }
+          ]}
+        >
+          <View style={[styles.modalHeader, { backgroundColor: getModalColor() }]}>
+            <Text style={styles.modalIcon}>{getModalIcon()}</Text>
+            <Text style={styles.modalTitle}>{title}</Text>
+          </View>
+          <View style={styles.modalBody}>
+            {children}
+          </View>
+          <TouchableOpacity style={[styles.modalCloseButton, { backgroundColor: getModalColor() }]} onPress={onClose}>
+            <Text style={styles.modalCloseText}>Close</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+};
+
+// Payment Status Modal Component
+const PaymentStatusModal = ({ visible, onClose, transaction, onStatusCheck }) => {
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [autoCheck, setAutoCheck] = useState(true);
+
+  useEffect(() => {
+    if (visible && transaction && autoCheck) {
+      checkStatus();
+      const interval = setInterval(checkStatus, 5000); // Check every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [visible, transaction, autoCheck]);
+
+  const checkStatus = async () => {
+    if (!transaction) return;
+
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/payment/status/${transaction.reference}`);
+      setStatus(response.data);
+
+      // Stop auto-checking if payment is completed or failed
+      if (response.data.status === 'paid' || response.data.status === 'cancelled') {
+        setAutoCheck(false);
+      }
+    } catch (error) {
+      console.error('Status check error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusColor = () => {
+    if (!status) return '#6b7280';
+    switch (status.status) {
+      case 'paid': return '#10b981';
+      case 'pending': return '#f59e0b';
+      case 'cancelled': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusIcon = () => {
+    if (!status) return '⏳';
+    switch (status.status) {
+      case 'paid': return '✅';
+      case 'pending': return '⏳';
+      case 'cancelled': return '❌';
+      default: return '❓';
+    }
+  };
+
+  return (
+    <CustomModal visible={visible} onClose={onClose} title="Payment Status" type={status?.status === 'paid' ? 'success' : status?.status === 'cancelled' ? 'error' : 'info'}>
+      {transaction && (
+        <View style={styles.statusContainer}>
+          <View style={styles.statusHeader}>
+            <Text style={[styles.statusIcon, { color: getStatusColor() }]}>
+              {getStatusIcon()}
+            </Text>
+            <Text style={[styles.statusText, { color: getStatusColor() }]}>
+              {status ? status.status.toUpperCase() : 'CHECKING...'}
+            </Text>
+          </View>
+
+          <View style={styles.statusDetails}>
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Reference:</Text>
+              <Text style={styles.statusValue}>{transaction.reference}</Text>
+            </View>
+
+            {transaction.paynow_reference && (
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Paynow Reference:</Text>
+                <Text style={styles.statusValue}>{transaction.paynow_reference}</Text>
+              </View>
+            )}
+
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Amount:</Text>
+              <Text style={styles.statusValue}>${transaction.amount}</Text>
+            </View>
+
+            {status && (
+              <>
+                <View style={styles.statusRow}>
+                  <Text style={styles.statusLabel}>Status:</Text>
+                  <Text style={[styles.statusValue, { color: getStatusColor(), fontWeight: 'bold' }]}>
+                    {status.status.toUpperCase()}
+                  </Text>
+                </View>
+
+                <View style={styles.statusRow}>
+                  <Text style={styles.statusLabel}>Paid:</Text>
+                  <Text style={[styles.statusValue, { color: status.paid ? '#10b981' : '#ef4444', fontWeight: 'bold' }]}>
+                    {status.paid ? 'YES' : 'NO'}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+
+          {transaction.instructions && (
+            <View style={styles.instructionsContainer}>
+              <Text style={styles.instructionsTitle}>Instructions:</Text>
+              <Text style={styles.instructionsText}>{transaction.instructions}</Text>
+            </View>
+          )}
+
+          <View style={styles.statusActions}>
+            <TouchableOpacity
+              style={[styles.statusButton, { backgroundColor: '#3b82f6' }]}
+              onPress={checkStatus}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.statusButtonText}>Refresh Status</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statusButton, { backgroundColor: autoCheck ? '#ef4444' : '#10b981' }]}
+              onPress={() => setAutoCheck(!autoCheck)}
+            >
+              <Text style={styles.statusButtonText}>
+                {autoCheck ? 'Stop Auto-Check' : 'Start Auto-Check'}
+              </Text>
+
+            </TouchableOpacity>
+          </View>
+
+          {autoCheck && (
+            <View style={styles.autoCheckIndicator}>
+              <ActivityIndicator size="small" color="#3b82f6" />
+              <Text style={styles.autoCheckText}>Auto-checking every 5 seconds...</Text>
+            </View>
+          )}
+        </View>
+      )}    </CustomModal>
+  );
+};
+
+// OMari OTP Modal Component
+const OtpModal = ({ visible, onClose, transaction }) => {
+  const [otpUrl, setOtpUrl] = useState('');
+  const [otpOpened, setOtpOpened] = useState(false);
+  const [autoMonitoring, setAutoMonitoring] = useState(false);
+    useEffect(() => {
+    if (visible && transaction) {
+      // Check for OMari OTP URL or redirect URL
+      const paymentUrl = transaction.remoteotpurl || transaction.redirect_url;
+      if (paymentUrl) {
+        setOtpUrl(paymentUrl);
+        setOtpOpened(false);
+        setAutoMonitoring(false);
+      }
+    }
+  }, [visible, transaction]);
+  const openOtpUrl = async () => {
+    if (otpUrl) {
+      try {
+        const supported = await Linking.canOpenURL(otpUrl);
+        if (supported) {
+          await Linking.openURL(otpUrl);
+          setOtpOpened(true);
+          setAutoMonitoring(true);
+          Alert.alert(
+            'Payment URL Opened', 
+            'Complete your OMari payment in the browser, then return to this app to monitor payment status.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          // Fallback for when Linking is not available
+          Alert.alert(
+            'OTP URL',
+            `Please open this URL in your browser to complete the payment:\n\n${otpUrl}`,
+            [
+              { 
+                text: 'Copy URL', 
+                onPress: () => {
+                  // In a real app, you would copy to clipboard
+                  console.log('URL to copy:', otpUrl);
+                  Alert.alert('URL copied to console - check logs');
+                }
+              },
+              { text: 'Done', onPress: () => {
+                setOtpOpened(true);
+                setAutoMonitoring(true);
+              }}
+            ]
+          );
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Failed to open payment URL');
+      }
+    }
+  };
+
+  return (
+    <CustomModal visible={visible} onClose={onClose} title="OMari Payment" type="info">
+      {transaction && (
+        <View style={styles.otpContainer}>
+          <View style={styles.otpHeader}>
+            <Text style={styles.otpIcon}>💳</Text>
+            <Text style={styles.otpTitle}>Complete OMari Payment</Text>
+          </View>
+
+          <View style={styles.otpDetails}>
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Reference:</Text>
+              <Text style={styles.statusValue}>{transaction.reference}</Text>
+            </View>
+              {transaction.otpreference && (
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>OTP Reference:</Text>
+                <Text style={styles.statusValue}>{transaction.otpreference}</Text>
+              </View>
+            )}
+            
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Amount:</Text>
+              <Text style={styles.statusValue}>${transaction.amount}</Text>
+            </View>
+          </View>          <View style={styles.otpInstructions}>
+            <Text style={styles.instructionsTitle}>Payment Steps:</Text>
+            <Text style={styles.instructionsText}>
+              1. Click "Open OMari Payment" to open the payment page{'\n'}
+              2. Enter your OMari PIN to authorize the payment{'\n'}
+              3. Return to this app to monitor payment status{'\n'}
+              4. Payment status will update automatically
+            </Text>
+          </View>
+
+          <View style={styles.otpActions}>
+            {!otpOpened ? (
+              <TouchableOpacity 
+                style={[styles.statusButton, { backgroundColor: '#e74c3c' }]} 
+                onPress={openOtpUrl}
+              >
+                <Text style={styles.statusButtonText}>Open OMari Payment</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.otpCompletedActions}>
+                <View style={styles.otpCompletedInfo}>
+                  <Text style={styles.otpCompletedIcon}>✅</Text>
+                  <Text style={styles.otpCompletedText}>Payment URL opened!</Text>
+                </View>
+                <TouchableOpacity 
+                  style={[styles.statusButton, { backgroundColor: '#10b981' }]} 
+                  onPress={() => {
+                    onClose();
+                    // This should trigger the status modal to open
+                  }}
+                >
+                  <Text style={styles.statusButtonText}>Monitor Payment Status</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+    </CustomModal>
+  );
+};
 
 const LoginScreen = ({ onLogin }) => {
   const [username, setUsername] = useState('');
@@ -25,7 +379,7 @@ const LoginScreen = ({ onLogin }) => {
     }
 
     setLoading(true);
-    
+
     // Simulate API call delay
     setTimeout(() => {
       if (username === MOCK_CREDENTIALS.username && password === MOCK_CREDENTIALS.password) {
@@ -106,111 +460,92 @@ const DashboardScreen = ({ onLogout }) => {
   const [selectedMethod, setSelectedMethod] = useState('ecocash');
   const [loading, setLoading] = useState(false);
   const [lastTransaction, setLastTransaction] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('Unknown');
+  const [connectionStatus, setConnectionStatus] = useState('Unknown');  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
 
   const paymentMethods = [
     { key: 'ecocash', label: 'EcoCash', color: '#10ac84' },
     { key: 'innbucks', label: 'InnBucks', color: '#3742fa' },
-    {key: 'omari', label: 'OMari', color:'#3956fa'}
+    { key: 'omari', label: 'OMari', color: '#3956fa' }
   ];
-
   // Test API connection
   const testConnection = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/health`, { timeout: 5000 });
       setConnectionStatus('Connected ✅');
-      Alert.alert('Connection Test', 'Successfully connected to backend!');
+      setModalMessage('Successfully connected to backend!');
+      setShowSuccessModal(true);
     } catch (error) {
       setConnectionStatus('Disconnected ❌');
-      Alert.alert(
-        'Connection Failed', 
-        `Cannot connect to backend at ${API_BASE_URL}\n\nTroubleshooting:\n1. Make sure Flask server is running\n2. Update API_BASE_URL with your computer's IP address\n3. Check firewall settings`
-      );
+      setModalMessage(`Cannot connect to backend at ${API_BASE_URL}\n\nTroubleshooting:\n1. Make sure Flask server is running\n2. Update API_BASE_URL with your computer's IP address\n3. Check firewall settings`);
+      setShowErrorModal(true);
     }
   };
-
   const handlePayment = async () => {
     if (!phoneNumber || !amount) {
-      Alert.alert('Error', 'Please fill in all fields');
+      setModalMessage('Please fill in all fields');
+      setShowErrorModal(true);
       return;
     }
 
     if (parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      setModalMessage('Please enter a valid amount');
+      setShowErrorModal(true);
       return;
     }
 
     setLoading(true);
-
     try {
-      // First try the test endpoint for debugging
-      const response = await axios.post(`${API_BASE_URL}/payment/test`, {
+      // Use real payment endpoint for production
+      const response = await axios.post(`${API_BASE_URL}/payment`, {
         phoneNumber,
         amount,
         method: selectedMethod
       });      if (response.data.status === 'success') {
-        setLastTransaction(response.data);
+        const transactionData = {
+          ...response.data,
+          amount: amount,
+          method: selectedMethod
+        };
+        setLastTransaction(transactionData);
+          // Clear form
+        setPhoneNumber('');
+        setAmount('');
         
-        // Create a more detailed alert message
-        let alertMessage = `Reference: ${response.data.reference}`;
-        if (response.data.paynow_reference) {
-          alertMessage += `\nPaynow Ref: ${response.data.paynow_reference}`;
+        // Show appropriate modal based on payment method
+        if (selectedMethod === 'omari' && (response.data.remoteotpurl || response.data.redirect_url)) {
+          // Show OTP modal for OMari payments
+          setShowOtpModal(true);
+        } else {
+          // Show status modal for other payment methods
+          setShowStatusModal(true);
         }
-        if (response.data.instructions) {
-          alertMessage += `\n\nInstructions:\n${response.data.instructions}`;
-        }
-        
-        Alert.alert(
-          'Payment Initiated!',
-          alertMessage,
-          [
-            ...(response.data.redirect_url ? [{
-              text: 'Open Payment Link',
-              onPress: () => {
-                // You could use Linking.openURL(response.data.redirect_url) here
-                console.log('Redirect URL:', response.data.redirect_url);
-              }
-            }] : []),
-            { 
-              text: 'OK', 
-              onPress: () => {
-                setPhoneNumber('');
-                setAmount('');
-              }
-            }
-          ]
-        );
       } else {
-        Alert.alert('Payment Failed', response.data.message || 'Something went wrong');
+        setModalMessage(response.data.message || 'Something went wrong');
+        setShowErrorModal(true);
       }
     } catch (error) {
       console.error('Payment error:', error);
-      Alert.alert(
-        'Payment Failed',
-        `Network error: ${error.message}\n\nAPI URL: ${API_BASE_URL}\n\nTroubleshooting:\n1. Check if backend is running\n2. Verify IP address\n3. Test API connection first`
-      );
+      setModalMessage(`Network error: ${error.message}\n\nAPI URL: ${API_BASE_URL}\n\nTroubleshooting:\n1. Check if backend is running\n2. Verify IP address\n3. Test API connection first`);
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
-  };
-
-  const checkPaymentStatus = async () => {
+  };  const checkPaymentStatus = () => {
     if (!lastTransaction) {
-      Alert.alert('No Transaction', 'No recent transaction to check');
+      setModalMessage('No recent transaction to check');
+      setShowErrorModal(true);
       return;
     }
+    setShowStatusModal(true);
+  };
 
-    try {
-      const response = await axios.get(`${API_BASE_URL}/payment/status/${lastTransaction.reference}`);
-      const status = response.data;
-      
-      Alert.alert(
-        'Payment Status',
-        `Reference: ${status.reference}\nStatus: ${status.status.toUpperCase()}\nAmount: $${status.amount}\nPaid: ${status.paid ? 'Yes' : 'No'}`
-      );
-    } catch (error) {
-      Alert.alert('Error', 'Failed to check payment status');
-    }
+  const handleOtpComplete = () => {
+    setShowOtpModal(false);
+    setShowStatusModal(true);
   };
 
   return (
@@ -237,7 +572,7 @@ const DashboardScreen = ({ onLogout }) => {
         {/* Payment Card */}
         <View style={styles.paymentCard}>
           <Text style={styles.cardTitle}>Make a Payment</Text>
-          
+
           <View style={styles.formGroup}>
             <Text style={styles.label}>Phone Number</Text>
             <TextInput
@@ -295,13 +630,14 @@ const DashboardScreen = ({ onLogout }) => {
         </View>
 
         {/* Recent Transaction */}
+
         {lastTransaction && (
           <View style={styles.transactionCard}>
             <Text style={styles.cardTitle}>Recent Transaction</Text>
             <View style={styles.transactionInfo}>
               <Text style={styles.transactionText}>Reference: {lastTransaction.reference}</Text>
-              <Text style={styles.transactionText}>Amount: ${amount}</Text>
-              <Text style={styles.transactionText}>Method: {selectedMethod.toUpperCase()}</Text>
+              <Text style={styles.transactionText}>Amount: ${lastTransaction.amount}</Text>
+              <Text style={styles.transactionText}>Method: {lastTransaction.method.toUpperCase()}</Text>
             </View>
             <TouchableOpacity style={styles.statusButton} onPress={checkPaymentStatus}>
               <Text style={styles.statusButtonText}>Check Status</Text>
@@ -309,6 +645,35 @@ const DashboardScreen = ({ onLogout }) => {
           </View>
         )}
       </ScrollView>
+
+      {/* Custom Modals */}
+      <CustomModal
+        visible={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="Success"
+        type="success"
+      >
+        <Text style={styles.modalText}>{modalMessage}</Text>
+      </CustomModal>
+
+      <CustomModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="Error"
+        type="error"
+      >
+        <Text style={styles.modalText}>{modalMessage}</Text>
+      </CustomModal>      <PaymentStatusModal
+        visible={showStatusModal}
+        onClose={() => setShowStatusModal(false)}
+        transaction={lastTransaction}
+      />
+
+      <OtpModal
+        visible={showOtpModal}
+        onClose={() => setShowOtpModal(false)}
+        transaction={lastTransaction}
+      />
     </SafeAreaView>
   );
 };
@@ -429,7 +794,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
-  },  scrollView: {
+  }, scrollView: {
     flex: 1,
   },
   dashboardHeader: {
@@ -578,8 +943,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginBottom: 4,
-  },
-  statusButton: {
+  }, statusButton: {
     backgroundColor: '#10b981',
     borderRadius: 8,
     paddingVertical: 12,
@@ -588,6 +952,211 @@ const styles = StyleSheet.create({
   statusButtonText: {
     color: '#ffffff',
     fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 25,
+    elevation: 10,
+    borderTopWidth: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    flex: 1,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#374151',
+    lineHeight: 24,
+  },
+  modalCloseButton: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Status Modal Styles
+  statusContainer: {
+    alignItems: 'center',
+  },
+  statusHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  statusIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  statusText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  statusDetails: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  statusLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  statusValue: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '600',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 10,
+  },
+  instructionsContainer: {
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    width: '100%',
+  },
+  instructionsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  instructionsText: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 18,
+  },
+  statusActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+    width: '100%',
+  },
+  statusButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  statusButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  autoCheckIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    width: '100%',
+  },  autoCheckText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginLeft: 8,
+  },
+
+  // OTP Modal Styles
+  otpContainer: {
+    alignItems: 'center',
+  },
+  otpHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  otpIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  otpTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  otpDetails: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  otpInstructions: {
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    width: '100%',
+  },  otpActions: {
+    width: '100%',
+  },
+  otpCompletedActions: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  otpCompletedInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0ea5e9',
+  },
+  otpCompletedIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  otpCompletedText: {
+    fontSize: 14,
+    color: '#0369a1',
     fontWeight: '600',
   },
 });
