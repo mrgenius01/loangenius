@@ -1,5 +1,6 @@
 """Main Flask application factory and initialization."""
 from flask import Flask
+from flask_login import LoginManager
 from flask_cors import CORS
 from flasgger import Swagger
 
@@ -7,9 +8,18 @@ from config import get_config
 from utils.database import init_db
 from services import PaynowService, PaymentService
 from routes import blueprints
+from routes.auth import auth_bp
 from routes.payment import init_payment_routes
 from routes.transaction import init_transaction_routes
 from routes.webhook import init_webhook_routes
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+
+@login_manager.user_loader
+def load_user(user_id):
+    from models.user import User
+    return User.query.get(int(user_id))
 
 def create_app(config_name=None):
     """Create and configure Flask application.
@@ -26,9 +36,12 @@ def create_app(config_name=None):
     # Load configuration
     config_class = get_config()
     app.config.from_object(config_class)
+      # Initialize extensions
+    CORS(app, supports_credentials=True)  # Enable CORS for React Native app
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Please log in to access this page.'
     
-    # Initialize extensions
-    CORS(app)  # Enable CORS for React Native app
     Swagger(app, template={
         "swagger": "2.0",
         "info": {
@@ -50,35 +63,48 @@ def create_app(config_name=None):
     )
     
     payment_service = PaymentService(paynow_service)
-    
-    # Initialize routes with service dependencies
+      # Initialize routes with service dependencies
     init_payment_routes(payment_service)
     init_transaction_routes(payment_service)
     init_webhook_routes(payment_service)
-      # Register blueprints
+    
+    # Register authentication blueprint
+    app.register_blueprint(auth_bp)
+    
+    # Register blueprints
     for blueprint in blueprints:
         app.register_blueprint(blueprint)
-    
-    # Perform startup checks
+      # Perform startup checks
     startup_check(app)
+    
+    # Create tables and check for initial setup
+    with app.app_context():
+        from utils.database import db
+        from models.user import User
+        db.create_all()
+        
+        # Check if we need initial setup
+        if User.query.count() == 0:
+            print("⚠️  No admin users found. Please visit /auth/setup to create an admin user.")
     
     return app
 
 def startup_check(app):
     """Perform startup checks."""
     with app.app_context():
-        print("="*50)
-        print("🚀 Loan Repayment Backend Starting...")
-        print(f"📊 Environment: {app.config.get('ENV', 'development')}")
-        print(f"🔧 Debug Mode: {app.config['DEBUG']}")
-        print(f"💳 Paynow Integration ID: {app.config['PAYNOW_INTEGRATION_ID']}")
-        print(f"✅ Credentials Configured: {get_config().credentials_configured}")
-        
-        if not get_config().credentials_configured:
-            print("⚠️  WARNING: Paynow credentials not configured!")
-            print("   Set PAYNOW_INTEGRATION_ID and PAYNOW_INTEGRATION_KEY environment variables")
-        
-        print("="*50)
+      print("="*50)
+      print("🚀 Loan Repayment Backend Starting...")
+      print(f"📊 Environment: {app.config.get('ENV', 'development')}")
+      print(f"🔧 Debug Mode: {app.config['DEBUG']}")
+      print(f"💳 Paynow Integration ID: {app.config['PAYNOW_INTEGRATION_ID']}")
+      print(f"🔐 Security: Authentication enabled")
+      print(f"✅ Credentials Configured: {get_config().credentials_configured}")
+      
+      if not get_config().credentials_configured:
+          print("⚠️  WARNING: Paynow credentials not configured!")
+          print("   Set PAYNOW_INTEGRATION_ID and PAYNOW_INTEGRATION_KEY environment variables")
+      
+      print("="*50)
 
 def main():
     """Run the application in development mode."""

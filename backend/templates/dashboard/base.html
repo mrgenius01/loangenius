@@ -25,11 +25,18 @@
             background-color: #f8fafc;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
-        .sidebar {
+          .sidebar {
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             min-height: 100vh;
             box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar .p-4 {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
         }
         
         .sidebar .nav-link {
@@ -42,6 +49,11 @@
         .sidebar .nav-link:hover, .sidebar .nav-link.active {
             color: white;
             background-color: rgba(255,255,255,0.1);
+        }
+        
+        .btn-outline-light:hover {
+            background-color: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.5);
         }
         
         .stat-card {
@@ -122,8 +134,7 @@
 </head>
 <body>
     <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
+        <div class="row">            <!-- Sidebar -->
             <div class="col-md-3 col-lg-2 sidebar p-0">
                 <div class="p-4">
                     <h4 class="text-white mb-4">
@@ -143,6 +154,17 @@
                             <i class="fas fa-cog me-2"></i> System Health
                         </a>
                     </nav>
+                    
+                    <!-- User Info and Logout -->
+                    <div class="mt-auto pt-4 border-top border-light border-opacity-25">
+                        <div class="text-white-50 small mb-2" id="user-info">
+                            <i class="fas fa-user-circle me-2"></i>
+                            <span id="current-user">Loading...</span>
+                        </div>
+                        <button class="btn btn-outline-light btn-sm w-100" onclick="logout()">
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                        </button>
+                    </div>
                 </div>
             </div>
             

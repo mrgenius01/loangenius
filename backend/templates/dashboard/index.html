@@ -1,7 +1,28 @@
 {% extends "dashboard/base.html" %}
 
 {% block content %}
-<!-- Header -->
+<!-- Header with User Info -->
+<div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+    <div>
+        <h1 class="h4 mb-0">Welcome back, <span id="header-username">Admin</span>!</h1>
+        <small class="text-muted">Last login: <span id="last-login">Today</span></small>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fas fa-user-circle me-2"></i><span id="dropdown-username">Admin</span>
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#" onclick="showUserProfile()"><i class="fas fa-user me-2"></i>Profile</a></li>
+                <li><a class="dropdown-item" href="#" onclick="showSettings()"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Overview Header -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2 class="mb-1">Dashboard Overview</h2>
@@ -629,6 +650,76 @@ function showError(message) {
     // You can implement a toast notification here
 }
 
+// Logout function
+async function logout() {
+    if (!confirm('Are you sure you want to logout?')) {
+        return;
+    }
+    
+    try {
+        // Get CSRF token first
+        const csrfResponse = await fetch('/auth/api/csrf-token');
+        const csrfData = await csrfResponse.json();
+        
+        if (!csrfData.data || !csrfData.data.csrf_token) {
+            throw new Error('Could not get CSRF token');
+        }
+        
+        const formData = new FormData();
+        formData.append('csrf_token', csrfData.data.csrf_token);
+        
+        const response = await fetch('/auth/logout', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        });
+        
+        if (response.ok) {
+            window.location.href = '/auth/login';
+        } else {
+            throw new Error('Logout failed');
+        }
+    } catch (error) {
+        console.error('Logout error:', error);
+        alert('Error logging out. Please try again.');
+    }
+}
+
+// Load current user info
+async function loadCurrentUser() {
+    try {
+        const response = await fetch('/auth/api/user');
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.data) {
+            const username = data.data.username;
+            const lastLogin = data.data.last_login ? new Date(data.data.last_login).toLocaleDateString() : 'First time';
+            
+            // Update all username displays
+            document.getElementById('current-user').textContent = username;
+            document.getElementById('header-username').textContent = username;
+            document.getElementById('dropdown-username').textContent = username;
+            document.getElementById('last-login').textContent = lastLogin;
+        }
+    } catch (error) {
+        console.error('Error loading user info:', error);
+        document.getElementById('current-user').textContent = 'Admin';
+        document.getElementById('header-username').textContent = 'Admin';
+        document.getElementById('dropdown-username').textContent = 'Admin';
+    }
+}
+
+// Placeholder functions for profile and settings
+function showUserProfile() {
+    alert('User profile feature coming soon!');
+}
+
+function showSettings() {
+    alert('Settings feature coming soon!');
+}
+
 // Add event listeners for filters
 document.addEventListener('DOMContentLoaded', function() {
     const statusFilter = document.getElementById('statusFilter');
@@ -647,6 +738,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load initial data
     loadDashboardData();
+    loadCurrentUser();
 });
 </script>
 {% endblock %}

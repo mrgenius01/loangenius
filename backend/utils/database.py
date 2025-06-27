@@ -11,6 +11,7 @@ def init_db(app):
     with app.app_context():
         # Import all models here to ensure they are registered
         from models.transaction import Transaction
+        from models.user import User
         
         # Create all tables
         db.create_all()

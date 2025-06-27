@@ -173,7 +173,15 @@ def success_response(data=None, message="Success", status_code=200):
     Returns:
         Flask JSON response
     """
-    return APIResponse.success(data, message, status_code)
+    response = {
+        "status": "success",
+        "message": message
+    }
+    
+    if data is not None:
+        response["data"] = data
+    
+    return jsonify(response), status_code
 
 def error_response(message="An error occurred", status_code=400, error_code=None):
     """
@@ -187,4 +195,12 @@ def error_response(message="An error occurred", status_code=400, error_code=None
     Returns:
         Flask JSON response
     """
-    return APIResponse.error(message, None, status_code, error_code)
+    response = {
+        "status": "error",
+        "message": message
+    }
+    
+    if error_code:
+        response["error_code"] = error_code
+    
+    return jsonify(response), status_code
