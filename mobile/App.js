@@ -9,9 +9,9 @@ const MOCK_CREDENTIALS = {
 };
 
 // Production backend URL - deployed on Render
-const API_BASE_URL = 'https://loangenius.onrender.com';
+// const API_BASE_URL = 'https://loangenius.onrender.com';
 // For local development, use:
-// const API_BASE_URL = 'http://192.168.137.1:5000';
+const API_BASE_URL = 'http://192.168.137.1:5000';
 
 const { width, height } = Dimensions.get('window');
 
@@ -251,7 +251,8 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
   const [otpError, setOtpError] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [showOtpInput, setShowOtpInput] = useState(false);
-  const [otpOpened, setOtpOpened] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
   const maxAttempts = 5;
 
   useEffect(() => {
@@ -262,9 +263,48 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
       setAttempts(0);
       setSubmitting(false);
       setShowOtpInput(false);
-      setOtpOpened(false);
+      setOtpSent(false);
+      setSendingOtp(false);
     }
   }, [visible]);
+
+  const sendOtp = async () => {
+    if (!transaction?.reference) {
+      setOtpError('Transaction reference not found');
+      return;
+    }
+
+    setSendingOtp(true);
+    setOtpError('');
+
+    try {
+      // Initiate OTP request - this will trigger the OTP to be sent to the user's phone
+      const response = await axios.post(`${API_BASE_URL}/payment/otp/request`, {
+        reference: transaction.reference
+      });
+
+      if (response.data.status === 'success') {
+        setOtpSent(true);
+        setShowOtpInput(true);
+        Alert.alert(
+          'OTP Sent!',
+          'An OTP has been sent to your phone. Please enter it below to complete the payment.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        setOtpError(response.data.message || 'Failed to send OTP');
+      }
+    } catch (error) {
+      let errorMessage = 'Failed to send OTP';
+      if (error.response && error.response.data) {
+        errorMessage = error.response.data.error || error.response.data.message || errorMessage;
+      }
+      setOtpError(errorMessage);
+      console.error('OTP request error:', error);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
 
   const submitOtp = async () => {
     if (!otpCode || otpCode.length !== 6) {
@@ -318,52 +358,6 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
     }
   };
 
-  const openPaymentUrl = async () => {
-    const url = transaction?.remoteotpurl || transaction?.redirect_url;
-    if (url) {
-      try {
-        const supported = await Linking.canOpenURL(url);
-        if (supported) {
-          await Linking.openURL(url);
-          setOtpOpened(true);
-          setShowOtpInput(true);
-          Alert.alert(
-            'Payment URL Opened',
-            'Complete your OMari payment in the browser. If you receive an OTP, enter it below. Otherwise, return to this app to monitor payment status.',
-            [{ text: 'OK' }]
-          );
-        } else {
-          // Fallback for when Linking is not available
-          Alert.alert(
-            'OMari Payment URL',
-            `Please open this URL in your browser to complete the payment:\n\n${url}`,
-            [
-              {
-                text: 'Copy URL',
-                onPress: () => {
-                  // In a real app, you would copy to clipboard
-                  console.log('URL to copy:', url);
-                  Alert.alert('URL copied to console - check logs');
-                  setOtpOpened(true);
-                  setShowOtpInput(true);
-                }
-              },
-              {
-                text: 'Done', 
-                onPress: () => {
-                  setOtpOpened(true);
-                  setShowOtpInput(true);
-                }
-              }
-            ]
-          );
-        }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to open payment URL');
-      }
-    }
-  };
-
   return (
     <CustomModal visible={visible} onClose={onClose} title="OMari Payment" type="info">
       {transaction && (
@@ -378,53 +372,109 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
               <Text style={styles.statusLabel}>Reference:</Text>
               <Text style={styles.statusValue}>{transaction.reference}</Text>
             </View>
-            {transaction.otpreference && (
-              <View style={styles.statusRow}>
-                <Text style={styles.statusLabel}>OTP Reference:</Text>
-                <Text style={styles.statusValue}>{transaction.otpreference}</Text>
-              </View>
-            )}
-
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Amount:</Text>
               <Text style={styles.statusValue}>${transaction.amount}</Text>
             </View>
-          </View>          <View style={styles.otpInstructions}>
-            <Text style={styles.instructionsTitle}>Payment Steps:</Text>
-            <Text style={styles.instructionsText}>
-              1. Click "Open OMari Payment" to open the payment page{'\n'}
-              2. Enter your OMari PIN to authorize the payment{'\n'}
-              3. Return to this app to monitor payment status{'\n'}
-              4. Payment status will update automatically
-            </Text>
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Phone:</Text>
+              <Text style={styles.statusValue}>{transaction.phone_number}</Text>
+            </View>
           </View>
 
+          {!otpSent ? (
+            <View style={styles.otpInstructions}>
+              <Text style={styles.instructionsTitle}>Payment Steps:</Text>
+              <Text style={styles.instructionsText}>
+                1. Click "Send OTP" to initiate the OMari payment{'\n'}
+                2. You will receive an OTP on your phone{'\n'}
+                3. Enter the OTP below to complete the payment{'\n'}
+                4. Payment status will update automatically
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.otpInstructions}>
+              <Text style={styles.instructionsTitle}>Enter OTP:</Text>
+              <Text style={styles.instructionsText}>
+                Enter the 6-digit OTP sent to your phone to complete the payment.
+              </Text>
+            </View>
+          )}
+
           <View style={styles.otpActions}>
-            {!otpOpened ? (
+            {!otpSent ? (
               <TouchableOpacity
-                style={[styles.statusButton, { backgroundColor: '#e74c3c' }]}
-                onPress={openOtpUrl}
+                style={[styles.statusButton, { backgroundColor: sendingOtp ? '#95a5a6' : '#e74c3c' }]}
+                onPress={sendOtp}
+                disabled={sendingOtp}
               >
-                <Text style={styles.statusButtonText}>Open OMari Payment</Text>
+                {sendingOtp ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text style={styles.statusButtonText}>Send OTP</Text>
+                )}
               </TouchableOpacity>
             ) : (
-              <View style={styles.otpCompletedActions}>
-                <View style={styles.otpCompletedInfo}>
-                  <Text style={styles.otpCompletedIcon}>✅</Text>
-                  <Text style={styles.otpCompletedText}>Payment URL opened!</Text>
+              <View style={styles.otpInputSection}>
+                <View style={styles.otpInputContainer}>
+                  <TextInput
+                    style={styles.otpInput}
+                    value={otpCode}
+                    onChangeText={setOtpCode}
+                    placeholder="Enter 6-digit OTP"
+                    keyboardType="numeric"
+                    maxLength={6}
+                    editable={!submitting && attempts < maxAttempts}
+                  />
                 </View>
-                <TouchableOpacity
-                  style={[styles.statusButton, { backgroundColor: '#10b981' }]}
-                  onPress={() => {
-                    onClose();
-                    // This should trigger the status modal to open
-                  }}
-                >
-                  <Text style={styles.statusButtonText}>Monitor Payment Status</Text>
-                </TouchableOpacity>
+                
+                {otpError ? (
+                  <Text style={styles.otpErrorText}>{otpError}</Text>
+                ) : null}
+
+                <View style={styles.otpButtonContainer}>
+                  <TouchableOpacity
+                    style={[styles.statusButton, { 
+                      backgroundColor: submitting || attempts >= maxAttempts ? '#95a5a6' : '#10b981',
+                      marginRight: 10,
+                      flex: 1
+                    }]}
+                    onPress={submitOtp}
+                    disabled={submitting || attempts >= maxAttempts}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <Text style={styles.statusButtonText}>Submit OTP</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.statusButton, { 
+                      backgroundColor: sendingOtp ? '#95a5a6' : '#3498db',
+                      flex: 1
+                    }]}
+                    onPress={sendOtp}
+                    disabled={sendingOtp}
+                  >
+                    {sendingOtp ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <Text style={styles.statusButtonText}>Resend OTP</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
+
+          {attempts > 0 && attempts < maxAttempts && (
+            <View style={styles.attemptsContainer}>
+              <Text style={styles.attemptsText}>
+                Attempts: {attempts}/{maxAttempts}
+              </Text>
+            </View>
+          )}
         </View>
       )}
     </CustomModal>
@@ -1223,5 +1273,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0369a1',
     fontWeight: '600',
+  },
+
+  // OTP Input Styles
+  otpInputSection: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  otpInputContainer: {
+    width: '100%',
+    marginBottom: 15,
+  },
+  otpInput: {
+    borderWidth: 2,
+    borderColor: '#3498db',
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 18,
+    textAlign: 'center',
+    letterSpacing: 2,
+    fontWeight: 'bold',
+    backgroundColor: '#f8f9fa',
+  },
+  otpErrorText: {
+    color: '#e74c3c',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 10,
+  },
+  otpButtonContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  attemptsContainer: {
+    marginTop: 10,
+    padding: 8,
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+  },
+  attemptsText: {
+    color: '#856404',
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

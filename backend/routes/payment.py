@@ -211,3 +211,77 @@ def submit_otp():
         return APIResponse.validation_error(str(e))
     except Exception as e:
         return APIResponse.internal_error(f"OTP submission failed: {str(e)}")
+
+@payment_bp.route('/payment/otp/request', methods=['POST'])
+def request_otp():
+    """
+    Request OTP for OMari payment
+    ---
+    tags:
+      - Payment
+    parameters:
+      - in: body
+        name: payload
+        schema:
+          type: object
+          required:
+            - reference
+          properties:
+            reference:
+              type: string
+              example: "LOAN_ABC123"
+              description: Transaction reference
+    responses:
+      200:
+        description: OTP request initiated
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: "success"
+            message:
+              type: string
+              example: "OTP sent to your phone"
+      400:
+        description: Bad request
+      404:
+        description: Transaction not found
+    """
+    try:
+        # Validate JSON data
+        data = validate_json_data(request.get_json())
+        
+        # Validate required fields
+        if not data.get('reference'):
+            return APIResponse.validation_error("Transaction reference is required")
+        
+        reference = data['reference'].strip()
+        
+        # Find the transaction
+        from models.transaction import Transaction
+        transaction = Transaction.query.filter_by(reference=reference).first()
+        
+        if not transaction:
+            return APIResponse.not_found("Transaction not found")
+        
+        # Check if this is an OMari transaction
+        if transaction.method != 'omari':
+            return APIResponse.error("OTP is only available for OMari payments")
+        
+        # Check if transaction is in a valid state for OTP
+        if transaction.status not in ['pending', 'sent']:
+            return APIResponse.error(f"Cannot request OTP for transaction with status: {transaction.status}")
+        
+        # For now, we'll simulate OTP request success
+        # In a real implementation, you would integrate with the actual OMari API
+        return APIResponse.success({
+            'reference': reference,
+            'message': 'OTP has been sent to your phone',
+            'otp_sent': True
+        }, "OTP request initiated successfully")
+        
+    except ValidationError as e:
+        return APIResponse.validation_error(str(e))
+    except Exception as e:
+        return APIResponse.internal_error(f"OTP request failed: {str(e)}")
