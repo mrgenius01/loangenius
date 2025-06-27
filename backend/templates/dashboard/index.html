@@ -1,0 +1,652 @@
+{% extends "dashboard/base.html" %}
+
+{% block content %}
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Dashboard Overview</h2>
+        <p class="text-muted">Monitor your loan repayment system</p>
+    </div>
+    <div>
+        <button class="btn btn-primary" onclick="refreshData()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Dashboard Section -->
+<div id="dashboard-section">
+    <!-- Stats Cards -->
+    <div class="row mb-4" id="stats-cards">
+        <div class="col-12">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+      <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="chart-container p-4">
+                <h5 class="mb-3">Weekly Transaction Trend</h5>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-container p-4">
+                <h5 class="mb-3">Payment Methods</h5>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="methodChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Transactions -->
+    <div class="table-container p-4">
+        <h5 class="mb-3">Recent Transactions</h5>
+        <div id="recent-transactions">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transactions Section -->
+<div id="transactions-section" style="display: none;">
+    <div class="table-container p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5>All Transactions</h5>
+            <div class="d-flex gap-2">
+                <select class="form-select" id="statusFilter" style="width: auto;">
+                    <option value="">All Status</option>
+                    <option value="paid">Paid</option>
+                    <option value="pending">Pending</option>
+                    <option value="sent">Sent</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <select class="form-select" id="methodFilter" style="width: auto;">
+                    <option value="">All Methods</option>
+                    <option value="ecocash">EcoCash</option>
+                    <option value="innbucks">InnBucks</option>
+                    <option value="omari">OMari</option>
+                </select>
+                <input type="text" class="form-control" id="searchInput" placeholder="Search..." style="width: 200px;">
+            </div>
+        </div>
+        <div id="transactions-table">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Section -->
+<div id="analytics-section" style="display: none;">
+    <div class="row">
+        <div class="col-12">
+            <div class="table-container p-4">
+                <h5 class="mb-4">Analytics & Reports</h5>
+                <p class="text-muted">Advanced analytics features coming soon...</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="stat-card p-4 mb-3">
+                            <h6>Average Transaction Amount</h6>
+                            <h3 class="text-primary" id="avg-amount">$0.00</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stat-card p-4 mb-3">
+                            <h6>Success Rate</h6>
+                            <h3 class="text-success" id="success-rate">0%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Health Section -->
+<div id="system-section" style="display: none;">
+    <div class="table-container p-4">
+        <h5 class="mb-4">System Health</h5>
+        <div id="system-health">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let trendChart, methodChart;
+
+// Navigation
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        // Update active nav
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+        
+        // Show/hide sections
+        const section = this.dataset.section;
+        document.querySelectorAll('[id$="-section"]').forEach(s => s.style.display = 'none');
+        document.getElementById(section + '-section').style.display = 'block';
+        
+        // Load section data
+        if (section === 'dashboard') {
+            loadDashboardData();
+        } else if (section === 'transactions') {
+            loadTransactions();
+        } else if (section === 'analytics') {
+            loadAnalytics();
+        } else if (section === 'system') {
+            loadSystemHealth();
+        }
+    });
+});
+
+// Load dashboard data
+async function loadDashboardData() {
+    try {
+        const response = await fetch('/admin/api/stats');
+        const data = await response.json();
+        
+        console.log('Dashboard response:', data); // Debug log
+        
+        if (data.status === 'success') {
+            // Handle both data formats - wrapped in 'data' property or direct
+            const statsData = data.data || data;
+            updateStatsCards(statsData);
+            updateCharts(statsData);
+            loadRecentTransactions();
+        } else {
+            showError('Failed to load dashboard data');
+        }
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        showError('Error loading dashboard data');
+    }
+}
+
+// Update stats cards
+function updateStatsCards(stats) {
+    const cards = [
+        {
+            title: 'Total Transactions',
+            value: stats.total_transactions,
+            icon: 'fas fa-receipt',
+            color: 'primary'
+        },
+        {
+            title: 'Total Amount',
+            value: `$${stats.total_amount.toFixed(2)}`,
+            icon: 'fas fa-dollar-sign',
+            color: 'success'
+        },
+        {
+            title: 'Successful Payments',
+            value: stats.successful_payments,
+            icon: 'fas fa-check-circle',
+            color: 'success'
+        },
+        {
+            title: 'Pending Payments',
+            value: stats.pending_payments,
+            icon: 'fas fa-clock',
+            color: 'warning'
+        },
+        {
+            title: 'Today\'s Transactions',
+            value: stats.today_transactions,
+            icon: 'fas fa-calendar-day',
+            color: 'info'
+        },
+        {
+            title: 'Today\'s Amount',
+            value: `$${stats.today_amount.toFixed(2)}`,
+            icon: 'fas fa-coins',
+            color: 'info'
+        }
+    ];
+    
+    const cardsHtml = cards.map(card => `
+        <div class="col-md-4 col-lg-2 mb-3">
+            <div class="stat-card p-3 text-center">
+                <div class="text-${card.color} mb-2">
+                    <i class="${card.icon} fa-2x"></i>
+                </div>
+                <h4 class="mb-1">${card.value}</h4>
+                <small class="text-muted">${card.title}</small>
+            </div>
+        </div>
+    `).join('');
+    
+    document.getElementById('stats-cards').innerHTML = cardsHtml;
+}
+
+// Update charts
+function updateCharts(stats) {
+    // Destroy existing charts
+    if (trendChart) {
+        trendChart.destroy();
+        trendChart = null;
+    }
+    if (methodChart) {
+        methodChart.destroy();
+        methodChart = null;
+    }
+    
+    // Trend Chart
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    trendChart = new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: stats.weekly_trend.map(d => new Date(d.date).toLocaleDateString()),
+            datasets: [{
+                label: 'Transactions',
+                data: stats.weekly_trend.map(d => d.count),
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#3b82f6',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#6b7280'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#6b7280'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Method Chart
+    const methodCtx = document.getElementById('methodChart').getContext('2d');
+    const methodData = stats.method_breakdown;
+    
+    if (methodData.length > 0) {
+        methodChart = new Chart(methodCtx, {
+            type: 'doughnut',
+            data: {
+                labels: methodData.map(m => m.method.toUpperCase()),
+                datasets: [{
+                    data: methodData.map(m => m.count),
+                    backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'],
+                    borderWidth: 3,
+                    borderColor: '#ffffff',
+                    hoverBorderWidth: 4,
+                    hoverBorderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            color: '#6b7280'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        borderColor: '#3b82f6',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return `${context.label}: ${context.raw} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        // Show no data message
+        methodCtx.font = '16px Arial';
+        methodCtx.fillStyle = '#6b7280';
+        methodCtx.textAlign = 'center';
+        methodCtx.fillText('No data available', methodCtx.canvas.width / 2, methodCtx.canvas.height / 2);
+    }
+}
+
+// Load recent transactions
+async function loadRecentTransactions() {
+    try {
+        const response = await fetch('/admin/api/transactions?per_page=5');
+        const data = await response.json();
+        
+        console.log('Recent transactions response:', data); // Debug log
+        
+        if (data.status === 'success') {
+            // Handle both data formats
+            const responseData = data.data || data;
+            const transactions = responseData.transactions || [];
+            
+            if (transactions.length === 0) {
+                document.getElementById('recent-transactions').innerHTML = '<p class="text-muted">No transactions found.</p>';
+                return;
+            }
+            
+            const transactionsHtml = `
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Amount</th>
+                                <th>Method</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${transactions.map(t => `
+                                <tr>
+                                    <td><code>${t.reference}</code></td>
+                                    <td>$${t.amount.toFixed(2)}</td>
+                                    <td><span class="badge bg-secondary">${t.method.toUpperCase()}</span></td>
+                                    <td><span class="status-badge status-${t.status}">${t.status.toUpperCase()}</span></td>
+                                    <td>${new Date(t.created_at).toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            document.getElementById('recent-transactions').innerHTML = transactionsHtml;
+        }
+    } catch (error) {
+        console.error('Error loading recent transactions:', error);
+        document.getElementById('recent-transactions').innerHTML = '<p class="text-danger">Error loading transactions</p>';
+    }
+}
+
+// Load all transactions
+async function loadTransactions(page = 1) {
+    const status = document.getElementById('statusFilter')?.value || '';
+    const method = document.getElementById('methodFilter')?.value || '';
+    const search = document.getElementById('searchInput')?.value || '';
+    
+    const params = new URLSearchParams({
+        page,
+        per_page: 20,
+        ...(status && { status }),
+        ...(method && { method }),
+        ...(search && { search })
+    });
+    
+    try {
+        const response = await fetch(`/admin/api/transactions?${params}`);
+        const data = await response.json();
+        
+        console.log('Transactions response:', data); // Debug log
+        
+        if (data.status === 'success') {
+            // Handle both data formats
+            const responseData = data.data || data;
+            const { transactions, pagination } = responseData;
+            
+            if (transactions.length === 0) {
+                document.getElementById('transactions-table').innerHTML = '<p class="text-muted">No transactions found.</p>';
+                return;
+            }
+            
+            const tableHtml = `
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Phone</th>
+                                <th>Amount</th>
+                                <th>Method</th>
+                                <th>Status</th>
+                                <th>Paynow Ref</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${transactions.map(t => `
+                                <tr>
+                                    <td><code>${t.reference}</code></td>
+                                    <td>${t.phone_number}</td>
+                                    <td>$${t.amount.toFixed(2)}</td>
+                                    <td><span class="badge bg-secondary">${t.method.toUpperCase()}</span></td>
+                                    <td><span class="status-badge status-${t.status}">${t.status.toUpperCase()}</span></td>
+                                    <td>${t.paynow_reference || '-'}</td>
+                                    <td>${new Date(t.created_at).toLocaleString()}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="checkStatus('${t.reference}')" title="Check Status">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <span class="text-muted">
+                        Showing ${transactions.length} of ${pagination.total} transactions
+                    </span>
+                    <nav>
+                        <ul class="pagination mb-0">
+                            ${pagination.has_prev ? `<li class="page-item"><button class="page-link" onclick="loadTransactions(${pagination.page - 1})">Previous</button></li>` : ''}
+                            <li class="page-item active"><span class="page-link">${pagination.page}</span></li>
+                            ${pagination.has_next ? `<li class="page-item"><button class="page-link" onclick="loadTransactions(${pagination.page + 1})">Next</button></li>` : ''}
+                        </ul>
+                    </nav>
+                </div>
+            `;
+            
+            document.getElementById('transactions-table').innerHTML = tableHtml;
+            currentPage = pagination.page;
+        }
+    } catch (error) {
+        console.error('Error loading transactions:', error);
+        document.getElementById('transactions-table').innerHTML = '<p class="text-danger">Error loading transactions</p>';
+    }
+}
+
+// Load analytics
+async function loadAnalytics() {
+    try {
+        const response = await fetch('/admin/api/stats');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Handle both data formats
+            const stats = data.data || data;
+            const avgAmount = stats.total_transactions > 0 ? stats.total_amount / stats.total_transactions : 0;
+            const successRate = stats.total_transactions > 0 ? (stats.successful_payments / stats.total_transactions * 100) : 0;
+            
+            document.getElementById('avg-amount').textContent = `$${avgAmount.toFixed(2)}`;
+            document.getElementById('success-rate').textContent = `${successRate.toFixed(1)}%`;
+        }
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+    }
+}
+
+// Load system health
+async function loadSystemHealth() {
+    try {
+        const response = await fetch('/admin/api/system/health');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Handle both data formats
+            const health = data.data || data;
+            const healthHtml = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="stat-card p-4 mb-3">
+                            <h6>Database Status</h6>
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-circle text-${health.database === 'healthy' ? 'success' : 'danger'} me-2"></i>
+                                <span class="text-capitalize">${health.database}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stat-card p-4 mb-3">
+                            <h6>Recent Activity</h6>
+                            <p class="mb-0">${health.recent_activity} transactions in last hour</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stat-card p-4 mb-3">
+                            <h6>Server Time</h6>
+                            <p class="mb-0">${new Date(health.server_time).toLocaleString()}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stat-card p-4 mb-3">
+                            <h6>System Status</h6>
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-circle text-success me-2"></i>
+                                <span>Operational</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('system-health').innerHTML = healthHtml;
+        }
+    } catch (error) {
+        console.error('Error loading system health:', error);
+        document.getElementById('system-health').innerHTML = '<p class="text-danger">Error loading system health</p>';
+    }
+}
+
+// Check payment status
+async function checkStatus(reference) {
+    try {
+        const response = await fetch(`/payment/status/${reference}`);
+        const data = await response.json();
+        
+        if (data.reference) {
+            alert(`Payment Status: ${data.status}\nPaid: ${data.paid ? 'Yes' : 'No'}`);
+            loadTransactions(currentPage);
+        } else {
+            alert('Error checking payment status');
+        }
+    } catch (error) {
+        console.error('Error checking status:', error);
+        alert('Error checking payment status');
+    }
+}
+
+// Refresh data
+function refreshData() {
+    const activeSection = document.querySelector('.nav-link.active').dataset.section;
+    if (activeSection === 'dashboard') {
+        loadDashboardData();
+    } else if (activeSection === 'transactions') {
+        loadTransactions(currentPage);
+    } else if (activeSection === 'analytics') {
+        loadAnalytics();
+    } else if (activeSection === 'system') {
+        loadSystemHealth();
+    }
+}
+
+// Show error message
+function showError(message) {
+    console.error(message);
+    // You can implement a toast notification here
+}
+
+// Add event listeners for filters
+document.addEventListener('DOMContentLoaded', function() {
+    const statusFilter = document.getElementById('statusFilter');
+    const methodFilter = document.getElementById('methodFilter');
+    const searchInput = document.getElementById('searchInput');
+    
+    if (statusFilter) statusFilter.addEventListener('change', () => loadTransactions(1));
+    if (methodFilter) methodFilter.addEventListener('change', () => loadTransactions(1));
+    if (searchInput) {
+        let debounceTimer;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => loadTransactions(1), 500);
+        });
+    }
+    
+    // Load initial data
+    loadDashboardData();
+});
+</script>
+{% endblock %}

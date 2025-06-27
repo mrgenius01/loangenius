@@ -159,3 +159,32 @@ class APIResponse:
             response_data["debug_info"] = debug_info
         
         return APIResponse.error(**response_data, status_code=400)
+
+# Add convenience functions for backward compatibility with dashboard
+def success_response(data=None, message="Success", status_code=200):
+    """
+    Create a standardized success response.
+    
+    Args:
+        data: The response data
+        message: Success message
+        status_code: HTTP status code
+        
+    Returns:
+        Flask JSON response
+    """
+    return APIResponse.success(data, message, status_code)
+
+def error_response(message="An error occurred", status_code=400, error_code=None):
+    """
+    Create a standardized error response.
+    
+    Args:
+        message: Error message
+        status_code: HTTP status code
+        error_code: Optional error code
+        
+    Returns:
+        Flask JSON response
+    """
+    return APIResponse.error(message, None, status_code, error_code)
