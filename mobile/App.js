@@ -245,52 +245,116 @@ const PaymentStatusModal = ({ visible, onClose, transaction, onStatusCheck }) =>
 };
 
 // OMari OTP Modal Component
-const OtpModal = ({ visible, onClose, transaction }) => {
-  const [otpUrl, setOtpUrl] = useState('');
+const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
+  const [otpCode, setOtpCode] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [attempts, setAttempts] = useState(0);
+  const [showOtpInput, setShowOtpInput] = useState(false);
   const [otpOpened, setOtpOpened] = useState(false);
-  const [autoMonitoring, setAutoMonitoring] = useState(false);
-    useEffect(() => {
-    if (visible && transaction) {
-      // Check for OMari OTP URL or redirect URL
-      const paymentUrl = transaction.remoteotpurl || transaction.redirect_url;
-      if (paymentUrl) {
-        setOtpUrl(paymentUrl);
-        setOtpOpened(false);
-        setAutoMonitoring(false);
-      }
+  const maxAttempts = 5;
+
+  useEffect(() => {
+    if (visible) {
+      // Reset state when modal opens
+      setOtpCode('');
+      setOtpError('');
+      setAttempts(0);
+      setSubmitting(false);
+      setShowOtpInput(false);
+      setOtpOpened(false);
     }
-  }, [visible, transaction]);
-  const openOtpUrl = async () => {
-    if (otpUrl) {
+  }, [visible]);
+
+  const submitOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      setOtpError('Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    setSubmitting(true);
+    setOtpError('');
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/payment/otp`, {
+        reference: transaction.reference,
+        otp: otpCode
+      });
+
+      if (response.data.status === 'success') {
+        Alert.alert(
+          'OTP Submitted Successfully!',
+          `Payment Status: ${response.data.payment_status}\n\nYour payment is being processed.`,
+          [
+            {
+              text: 'Check Status',
+              onPress: () => {
+                onClose();
+                if (onOtpSuccess) {
+                  onOtpSuccess();
+                }
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      const newAttempts = attempts + 1;
+      setAttempts(newAttempts);
+      
+      let errorMessage = 'Failed to submit OTP';
+      if (error.response && error.response.data) {
+        errorMessage = error.response.data.error || error.response.data.message || errorMessage;
+      }
+      
+      if (newAttempts >= maxAttempts) {
+        setOtpError(`Maximum attempts reached (${maxAttempts}). Transaction cancelled. Please start a new payment.`);
+      } else {
+        const remainingAttempts = maxAttempts - newAttempts;
+        setOtpError(`${errorMessage}. ${remainingAttempts} attempts remaining.`);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openPaymentUrl = async () => {
+    const url = transaction?.remoteotpurl || transaction?.redirect_url;
+    if (url) {
       try {
-        const supported = await Linking.canOpenURL(otpUrl);
+        const supported = await Linking.canOpenURL(url);
         if (supported) {
-          await Linking.openURL(otpUrl);
+          await Linking.openURL(url);
           setOtpOpened(true);
-          setAutoMonitoring(true);
+          setShowOtpInput(true);
           Alert.alert(
-            'Payment URL Opened', 
-            'Complete your OMari payment in the browser, then return to this app to monitor payment status.',
+            'Payment URL Opened',
+            'Complete your OMari payment in the browser. If you receive an OTP, enter it below. Otherwise, return to this app to monitor payment status.',
             [{ text: 'OK' }]
           );
         } else {
           // Fallback for when Linking is not available
           Alert.alert(
-            'OTP URL',
-            `Please open this URL in your browser to complete the payment:\n\n${otpUrl}`,
+            'OMari Payment URL',
+            `Please open this URL in your browser to complete the payment:\n\n${url}`,
             [
-              { 
-                text: 'Copy URL', 
+              {
+                text: 'Copy URL',
                 onPress: () => {
                   // In a real app, you would copy to clipboard
-                  console.log('URL to copy:', otpUrl);
+                  console.log('URL to copy:', url);
                   Alert.alert('URL copied to console - check logs');
+                  setOtpOpened(true);
+                  setShowOtpInput(true);
                 }
               },
-              { text: 'Done', onPress: () => {
-                setOtpOpened(true);
-                setAutoMonitoring(true);
-              }}
+              {
+                text: 'Done', 
+                onPress: () => {
+                  setOtpOpened(true);
+                  setShowOtpInput(true);
+                }
+              }
             ]
           );
         }
@@ -314,13 +378,13 @@ const OtpModal = ({ visible, onClose, transaction }) => {
               <Text style={styles.statusLabel}>Reference:</Text>
               <Text style={styles.statusValue}>{transaction.reference}</Text>
             </View>
-              {transaction.otpreference && (
+            {transaction.otpreference && (
               <View style={styles.statusRow}>
                 <Text style={styles.statusLabel}>OTP Reference:</Text>
                 <Text style={styles.statusValue}>{transaction.otpreference}</Text>
               </View>
             )}
-            
+
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Amount:</Text>
               <Text style={styles.statusValue}>${transaction.amount}</Text>
@@ -337,8 +401,8 @@ const OtpModal = ({ visible, onClose, transaction }) => {
 
           <View style={styles.otpActions}>
             {!otpOpened ? (
-              <TouchableOpacity 
-                style={[styles.statusButton, { backgroundColor: '#e74c3c' }]} 
+              <TouchableOpacity
+                style={[styles.statusButton, { backgroundColor: '#e74c3c' }]}
                 onPress={openOtpUrl}
               >
                 <Text style={styles.statusButtonText}>Open OMari Payment</Text>
@@ -349,8 +413,8 @@ const OtpModal = ({ visible, onClose, transaction }) => {
                   <Text style={styles.otpCompletedIcon}>✅</Text>
                   <Text style={styles.otpCompletedText}>Payment URL opened!</Text>
                 </View>
-                <TouchableOpacity 
-                  style={[styles.statusButton, { backgroundColor: '#10b981' }]} 
+                <TouchableOpacity
+                  style={[styles.statusButton, { backgroundColor: '#10b981' }]}
                   onPress={() => {
                     onClose();
                     // This should trigger the status modal to open
@@ -460,7 +524,7 @@ const DashboardScreen = ({ onLogout }) => {
   const [selectedMethod, setSelectedMethod] = useState('ecocash');
   const [loading, setLoading] = useState(false);
   const [lastTransaction, setLastTransaction] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('Unknown');  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('Unknown'); const [showStatusModal, setShowStatusModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -504,17 +568,17 @@ const DashboardScreen = ({ onLogout }) => {
         phoneNumber,
         amount,
         method: selectedMethod
-      });      if (response.data.status === 'success') {
+      }); if (response.data.status === 'success') {
         const transactionData = {
           ...response.data,
           amount: amount,
           method: selectedMethod
         };
         setLastTransaction(transactionData);
-          // Clear form
+        // Clear form
         setPhoneNumber('');
         setAmount('');
-        
+
         // Show appropriate modal based on payment method
         if (selectedMethod === 'omari' && (response.data.remoteotpurl || response.data.redirect_url)) {
           // Show OTP modal for OMari payments
@@ -534,7 +598,7 @@ const DashboardScreen = ({ onLogout }) => {
     } finally {
       setLoading(false);
     }
-  };  const checkPaymentStatus = () => {
+  }; const checkPaymentStatus = () => {
     if (!lastTransaction) {
       setModalMessage('No recent transaction to check');
       setShowErrorModal(true);
@@ -585,7 +649,7 @@ const DashboardScreen = ({ onLogout }) => {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Amount (USD)</Text>
+            <Text style={styles.label}>Amount (ZWL)</Text>
             <TextInput
               style={styles.paymentInput}
               placeholder="e.g., 50.00"
@@ -663,7 +727,8 @@ const DashboardScreen = ({ onLogout }) => {
         type="error"
       >
         <Text style={styles.modalText}>{modalMessage}</Text>
-      </CustomModal>      <PaymentStatusModal
+      </CustomModal>
+      <PaymentStatusModal
         visible={showStatusModal}
         onClose={() => setShowStatusModal(false)}
         transaction={lastTransaction}
@@ -1099,7 +1164,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     width: '100%',
-  },  autoCheckText: {
+  }, autoCheckText: {
     fontSize: 12,
     color: '#6b7280',
     marginLeft: 8,
@@ -1132,7 +1197,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
     width: '100%',
-  },  otpActions: {
+  }, otpActions: {
     width: '100%',
   },
   otpCompletedActions: {
