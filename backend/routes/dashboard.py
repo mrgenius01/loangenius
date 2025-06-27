@@ -5,7 +5,7 @@ from sqlalchemy import func, desc
 from models.transaction import Transaction
 from utils.database import db
 from utils.responses import success_response, error_response
-from utils.security import login_required, admin_required, csrf_required, rate_limit
+from utils.security import login_required, admin_required, csrf_required, rate_limit, api_admin_required
 from services.auth_service import AuthService
 from flasgger import swag_from
 
@@ -20,8 +20,7 @@ def dashboard_home():
     return render_template('dashboard/index.html', csrf_token=csrf_token)
 
 @dashboard_bp.route('/api/stats')
-@login_required
-@admin_required
+@api_admin_required
 @rate_limit(max_requests=30, window=60)
 def get_dashboard_stats():
     """
@@ -119,8 +118,7 @@ def get_dashboard_stats():
         return error_response(f"Failed to get dashboard stats: {str(e)}", 500)
 
 @dashboard_bp.route('/api/transactions')
-@login_required
-@admin_required
+@api_admin_required
 @rate_limit(max_requests=60, window=60)
 def get_dashboard_transactions():
     """
@@ -209,8 +207,7 @@ def get_dashboard_transactions():
         return error_response(f"Failed to get transactions: {str(e)}", 500)
 
 @dashboard_bp.route('/api/system/health')
-@login_required
-@admin_required
+@api_admin_required
 @rate_limit(max_requests=20, window=60)
 def system_health():
     """

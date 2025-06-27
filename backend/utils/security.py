@@ -1,6 +1,6 @@
 """Security utilities and decorators."""
 from functools import wraps
-from flask import request, jsonify, session, abort
+from flask import request, jsonify, session, abort, redirect, url_for
 from flask_login import current_user
 from services.auth_service import AuthService
 import time
@@ -11,10 +11,15 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
-            if request.is_json:
+            # Check if this is an API request
+            if (request.is_json or 
+                request.path.startswith('/admin/api/') or 
+                request.headers.get('Content-Type', '').startswith('application/json') or
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest'):
                 return jsonify({'error': 'Authentication required'}), 401
             else:
-                abort(401)
+                # Redirect to login page for web requests
+                return redirect('/auth/login')
         return f(*args, **kwargs)
     return decorated_function
 
@@ -23,16 +28,26 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
-            if request.is_json:
+            # Check if this is an API request
+            if (request.is_json or 
+                request.path.startswith('/admin/api/') or 
+                request.headers.get('Content-Type', '').startswith('application/json') or
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest'):
                 return jsonify({'error': 'Authentication required'}), 401
             else:
-                abort(401)
+                # Redirect to login page for web requests
+                return redirect('/auth/login')
         
         if current_user.role != 'admin':
-            if request.is_json:
+            # Check if this is an API request
+            if (request.is_json or 
+                request.path.startswith('/admin/api/') or 
+                request.headers.get('Content-Type', '').startswith('application/json') or
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest'):
                 return jsonify({'error': 'Admin access required'}), 403
             else:
-                abort(403)
+                # Redirect to login page for web requests (or could be a 403 page)
+                return redirect('/auth/login')
         
         return f(*args, **kwargs)
     return decorated_function
@@ -44,10 +59,15 @@ def csrf_required(f):
         if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
             token = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token')
             if not AuthService.validate_csrf_token(token):
-                if request.is_json:
+                # Check if this is an API request
+                if (request.is_json or 
+                    request.path.startswith('/admin/api/') or 
+                    request.headers.get('Content-Type', '').startswith('application/json') or
+                    request.headers.get('X-Requested-With') == 'XMLHttpRequest'):
                     return jsonify({'error': 'Invalid CSRF token'}), 403
                 else:
-                    abort(403)
+                    # For web requests, redirect to login with error message
+                    return redirect('/auth/login?error=invalid_csrf')
         return f(*args, **kwargs)
     return decorated_function
 
@@ -91,3 +111,25 @@ def rate_limit(max_requests=60, window=60):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+def api_login_required(f):
+    """Require user to be logged in for API endpoints (always returns JSON)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def api_admin_required(f):
+    """Require user to be admin for API endpoints (always returns JSON)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        if current_user.role != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        return f(*args, **kwargs)
+    return decorated_function

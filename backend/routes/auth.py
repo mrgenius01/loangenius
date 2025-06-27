@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_user, logout_user, current_user, login_required
 from models.user import User, LoginAttempt
 from services.auth_service import AuthService
-from utils.security import csrf_required, rate_limit
+from utils.security import csrf_required, rate_limit, api_login_required
 from utils.responses import success_response, error_response
 from utils.database import db
 
@@ -70,7 +70,7 @@ def get_csrf_token():
     return success_response({'csrf_token': token})
 
 @auth_bp.route('/api/user')
-@login_required
+@api_login_required
 def get_current_user():
     """Get current user info."""
     return success_response(current_user.to_dict())
