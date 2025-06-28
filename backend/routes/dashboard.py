@@ -17,7 +17,7 @@ dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/admin')
 def dashboard_home():
     """Admin Dashboard Home."""
     csrf_token = AuthService.generate_csrf_token()
-    return render_template('dashboard/index.html', csrf_token=csrf_token)
+    return render_template('dashboard/enhanced.html', csrf_token=csrf_token)
 
 @dashboard_bp.route('/api/stats')
 @api_admin_required

@@ -62,8 +62,7 @@ const DashboardScreen = ({ onLogout }) => {
     try {
       const response = await ApiService.createPayment(phoneNumber, amount, selectedMethod);
 
-      if (response.success && response.data.status === 'success') {
-        const transactionData = {
+      if (response.success && response.data.status === 'success') {        const transactionData = {
           ...response.data,
           amount: amount,
           method: selectedMethod,
@@ -76,9 +75,11 @@ const DashboardScreen = ({ onLogout }) => {
         setAmount('');
 
         // Show appropriate modal based on payment method
-        if (selectedMethod === 'omari' && (response.data.remoteotpurl || response.data.redirect_url)) {
+        if (selectedMethod === 'omari') {
+          // For OMari, immediately show OTP modal
           setShowOtpModal(true);
         } else {
+          // For other methods, show status modal
           setShowStatusModal(true);
         }
       } else {

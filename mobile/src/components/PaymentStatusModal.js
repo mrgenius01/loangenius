@@ -13,14 +13,28 @@ const PaymentStatusModal = ({ visible, onClose, transaction, onStatusCheck }) =>
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [autoCheck, setAutoCheck] = useState(true);
+  const [checkCount, setCheckCount] = useState(0);
+  const [timeoutReached, setTimeoutReached] = useState(false);
+  const MAX_CHECKS = 5;
 
   useEffect(() => {
-    if (visible && transaction && autoCheck) {
+    if (visible && transaction && autoCheck && !timeoutReached) {
       checkStatus();
-      const interval = setInterval(checkStatus, OTP_CONFIG.AUTO_CHECK_INTERVAL);
+      const interval = setInterval(() => {
+        setCheckCount(prev => {
+          const newCount = prev + 1;
+          if (newCount >= MAX_CHECKS) {
+            setAutoCheck(false);
+            setTimeoutReached(true);
+            return newCount;
+          }
+          checkStatus();
+          return newCount;
+        });
+      }, OTP_CONFIG.AUTO_CHECK_INTERVAL);
       return () => clearInterval(interval);
     }
-  }, [visible, transaction, autoCheck]);
+  }, [visible, transaction, autoCheck, timeoutReached]);
 
   const checkStatus = async () => {
     if (!transaction?.reference) return;
@@ -41,33 +55,19 @@ const PaymentStatusModal = ({ visible, onClose, transaction, onStatusCheck }) =>
     } finally {
       setLoading(false);
     }
-  };
-
-  const getStatusColor = () => {
-    if (!status?.status) return '#6b7280';
+  };  const getStatusDisplay = () => {
+    if (!status?.status) return { text: 'CHECKING...', color: '#6b7280', icon: '⏳' };
     switch (status.status) {
-      case 'paid': return '#10b981';
-      case 'pending': return '#f59e0b';
-      case 'cancelled': return '#ef4444';
-      default: return '#6b7280';
-    }
-  };
-
-  const getStatusIcon = () => {
-    if (!status?.status) return '⏳';
-    switch (status.status) {
-      case 'paid': return '✅';
-      case 'pending': return '⏳';
-      case 'cancelled': return '❌';
-      default: return '❓';
+      case 'paid': return { text: 'PAID', color: '#059669', icon: '✓' };
+      case 'pending': return { text: 'PENDING', color: '#d97706', icon: '⏳' };
+      case 'cancelled': return { text: 'CANCELLED', color: '#dc2626', icon: '✗' };
+      default: return { text: 'UNKNOWN', color: '#6b7280', icon: '?' };
     }
   };
 
   const getModalType = () => {
-    if (!status?.status) return 'info';
-    return status.status === 'paid' ? 'success' : status.status === 'cancelled' ? 'error' : 'info';
+    return 'info'; // Always use neutral info type for clean look
   };
-
   return (
     <CustomModal 
       visible={visible} 
@@ -76,92 +76,58 @@ const PaymentStatusModal = ({ visible, onClose, transaction, onStatusCheck }) =>
       type={getModalType()}
     >
       {transaction ? (
-        <View style={modalStyles.statusContainer}>
-          <View style={modalStyles.statusHeader}>
-            <Text style={[modalStyles.statusIcon, { color: getStatusColor() }]}>
-              {getStatusIcon()}
-            </Text>
-            <Text style={[modalStyles.statusText, { color: getStatusColor() }]}>
-              {(status?.status) ? status.status.toUpperCase() : 'CHECKING...'}
+        <View style={modalStyles.compactStatusContainer}>
+          {/* Simplified status display */}
+          <View style={modalStyles.compactStatusHeader}>
+            <Text style={modalStyles.compactStatusText}>
+              {getStatusDisplay().text}
             </Text>
           </View>
 
-          <View style={modalStyles.statusDetails}>
-            <View style={modalStyles.statusRow}>
-              <Text style={modalStyles.statusLabel}>Reference:</Text>
-              <Text style={modalStyles.statusValue}>{transaction.reference || 'N/A'}</Text>
+          {/* Essential transaction details only */}
+          <View style={modalStyles.compactStatusDetails}>
+            <View style={modalStyles.compactStatusRow}>
+              <Text style={modalStyles.compactLabel}>Reference:</Text>
+              <Text style={modalStyles.compactValue}>{transaction.reference || 'N/A'}</Text>
             </View>
 
-            {transaction.paynow_reference && (
-              <View style={modalStyles.statusRow}>
-                <Text style={modalStyles.statusLabel}>Paynow Reference:</Text>
-                <Text style={modalStyles.statusValue}>{transaction.paynow_reference}</Text>
-              </View>
-            )}
-
-            <View style={modalStyles.statusRow}>
-              <Text style={modalStyles.statusLabel}>Amount:</Text>
-              <Text style={modalStyles.statusValue}>${transaction.amount || '0.00'}</Text>
+            <View style={modalStyles.compactStatusRow}>
+              <Text style={modalStyles.compactLabel}>Amount:</Text>
+              <Text style={modalStyles.compactValue}>${transaction.amount || '0.00'}</Text>
             </View>
-
-            {status && (
-              <>
-                <View style={modalStyles.statusRow}>
-                  <Text style={modalStyles.statusLabel}>Status:</Text>
-                  <Text style={[modalStyles.statusValue, { color: getStatusColor(), fontWeight: 'bold' }]}>
-                    {(status?.status) ? status.status.toUpperCase() : 'UNKNOWN'}
-                  </Text>
-                </View>
-
-                <View style={modalStyles.statusRow}>
-                  <Text style={modalStyles.statusLabel}>Paid:</Text>
-                  <Text style={[modalStyles.statusValue, { color: (status?.paid) ? '#10b981' : '#ef4444', fontWeight: 'bold' }]}>
-                    {(status?.paid) ? 'YES' : 'NO'}
-                  </Text>
-                </View>
-              </>
-            )}
           </View>
 
-          {transaction.instructions && (
-            <View style={modalStyles.instructionsContainer}>
-              <Text style={modalStyles.instructionsTitle}>Instructions:</Text>
-              <Text style={modalStyles.instructionsText}>{transaction.instructions}</Text>
-            </View>
-          )}
-
-          <View style={modalStyles.statusActions}>
-            <TouchableOpacity
-              style={[modalStyles.statusButton, { backgroundColor: '#3b82f6' }]}
-              onPress={checkStatus}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Text style={modalStyles.statusButtonText}>Refresh Status</Text>
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[modalStyles.statusButton, { backgroundColor: autoCheck ? '#ef4444' : '#10b981' }]}
-              onPress={() => setAutoCheck(!autoCheck)}
-            >
-              <Text style={modalStyles.statusButtonText}>
-                {autoCheck ? 'Stop Auto-Check' : 'Start Auto-Check'}
+          {/* Auto-check indicator - minimal */}
+          {autoCheck && !timeoutReached && (
+            <View style={modalStyles.compactIndicator}>
+              <Text style={modalStyles.compactIndicatorText}>
+                Auto-checking... ({checkCount + 1}/{MAX_CHECKS})
               </Text>
-            </TouchableOpacity>
-          </View>
-
-          {autoCheck && (
-            <View style={modalStyles.autoCheckIndicator}>
-              <ActivityIndicator size="small" color="#3b82f6" />
-              <Text style={modalStyles.autoCheckText}>Auto-checking every 5 seconds...</Text>
             </View>
           )}
+
+          {/* Timeout message */}
+          {timeoutReached && (
+            <View style={modalStyles.compactTimeoutMessage}>
+              <Text style={modalStyles.compactTimeoutText}>
+                Auto-check complete. Tap "Check Now" to refresh status.
+              </Text>
+            </View>
+          )}
+
+          {/* Single action button */}
+          <TouchableOpacity
+            style={modalStyles.compactActionButton}
+            onPress={checkStatus}
+            disabled={loading}
+          >
+            <Text style={modalStyles.compactActionText}>
+              {loading ? 'Checking...' : 'Check Now'}
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <View style={modalStyles.statusContainer}>
+        <View style={modalStyles.compactStatusContainer}>
           <Text style={modalStyles.modalText}>No transaction data available</Text>
         </View>
       )}

@@ -196,8 +196,7 @@ export const modalStyles = StyleSheet.create({
     width: '100%',
     marginBottom: 15,
   },
-  otpInput: {
-    borderWidth: 2,
+  otpInput: {    borderWidth: 2,
     borderColor: '#3498db',
     borderRadius: 12,
     padding: 15,
@@ -232,5 +231,76 @@ export const modalStyles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     fontWeight: '500',
+  },
+
+  // Compact Payment Status Modal Styles
+  compactStatusContainer: {
+    paddingVertical: 10,
+  },
+  compactStatusHeader: {
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  compactStatusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  compactStatusDetails: {
+    marginBottom: 15,
+  },
+  compactStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  compactLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  compactValue: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '600',
+  },
+  compactIndicator: {
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingVertical: 8,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+  },
+  compactIndicatorText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
+  compactTimeoutMessage: {
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingVertical: 8,
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+  },
+  compactTimeoutText: {
+    fontSize: 12,
+    color: '#92400e',
+    textAlign: 'center',
+  },
+  compactActionButton: {
+    backgroundColor: '#6b7280',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  compactActionText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

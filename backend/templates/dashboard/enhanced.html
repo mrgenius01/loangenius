@@ -1,0 +1,888 @@
+{% extends "dashboard/base.html" %}
+
+{% block content %}
+<!-- Enhanced Dashboard Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">🏦 Comprehensive Loan Management Dashboard</h1>
+        <p class="text-muted">Complete overview of users, loans, transactions and analytics</p>
+    </div>
+    <div class="btn-group" role="group">
+        <button class="btn btn-primary" onclick="refreshAllData()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh All
+        </button>
+        <button class="btn btn-success" onclick="exportData()">
+            <i class="fas fa-download me-2"></i>Export
+        </button>
+        <button class="btn btn-info" onclick="showSystemHealth()">
+            <i class="fas fa-heart me-2"></i>System Health
+        </button>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs mb-4" id="dashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+            <i class="fas fa-chart-pie me-2"></i>Overview
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
+            <i class="fas fa-users me-2"></i>Users <span class="badge bg-primary ms-1" id="user-count-badge">0</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="loans-tab" data-bs-toggle="tab" data-bs-target="#loans" type="button" role="tab">
+            <i class="fas fa-hand-holding-usd me-2"></i>Loans <span class="badge bg-success ms-1" id="loan-count-badge">0</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button" role="tab">
+            <i class="fas fa-money-bill-wave me-2"></i>Transactions <span class="badge bg-info ms-1" id="transaction-count-badge">0</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button" role="tab">
+            <i class="fas fa-chart-line me-2"></i>Analytics
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab">
+            <i class="fas fa-shield-alt me-2"></i>Security
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="dashboardTabsContent">
+    
+    <!-- Overview Tab -->
+    <div class="tab-pane fade show active" id="overview" role="tabpanel">
+        <!-- Summary Cards -->
+        <div class="row mb-4" id="overview-cards">
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading overview...</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bolt me-2"></i>Quick Actions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-primary w-100" onclick="showAddUser()">
+                                    <i class="fas fa-user-plus me-2"></i>Add User
+                                </button>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-success w-100" onclick="showAddLoan()">
+                                    <i class="fas fa-plus me-2"></i>Create Loan
+                                </button>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-info w-100" onclick="showSystemHealth()">
+                                    <i class="fas fa-heart-pulse me-2"></i>System Status
+                                </button>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-warning w-100" onclick="showReports()">
+                                    <i class="fas fa-file-export me-2"></i>Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Activity -->
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clock me-2"></i>Recent Activity
+                        </h5>
+                    </div>
+                    <div class="card-body" id="recent-activity">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Alerts & Notifications
+                        </h5>
+                    </div>
+                    <div class="card-body" id="alerts-panel">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Users Tab -->
+    <div class="tab-pane fade" id="users" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4>👥 User Management</h4>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="showAddUser()">
+                    <i class="fas fa-user-plus me-2"></i>Add User
+                </button>
+                <button class="btn btn-outline-secondary" onclick="exportUsers()">
+                    <i class="fas fa-download me-2"></i>Export
+                </button>
+            </div>
+        </div>
+        
+        <!-- User Filters -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <select class="form-select" id="user-role-filter" onchange="filterUsers()">
+                            <option value="">All Roles</option>
+                            <option value="admin">Admin</option>
+                            <option value="customer">Customer</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="user-status-filter" onchange="filterUsers()">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" id="user-search" placeholder="Search users..." onkeyup="searchUsers()">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="clearUserFilters()">
+                            <i class="fas fa-times me-2"></i>Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Users Table -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive" id="users-table-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loans Tab -->
+    <div class="tab-pane fade" id="loans" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4>🏦 Loan Management</h4>
+            <div class="btn-group">
+                <button class="btn btn-success" onclick="showAddLoan()">
+                    <i class="fas fa-plus me-2"></i>Create Loan
+                </button>
+                <button class="btn btn-outline-secondary" onclick="exportLoans()">
+                    <i class="fas fa-download me-2"></i>Export
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loan Summary Cards -->
+        <div class="row mb-3" id="loan-summary-cards">
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+        </div>
+        
+        <!-- Loan Filters -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <select class="form-select" id="loan-status-filter" onchange="filterLoans()">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="defaulted">Defaulted</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="loan-amount-filter" onchange="filterLoans()">
+                            <option value="">All Amounts</option>
+                            <option value="0-500">$0 - $500</option>
+                            <option value="500-1000">$500 - $1,000</option>
+                            <option value="1000-5000">$1,000 - $5,000</option>
+                            <option value="5000+">$5,000+</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" id="loan-search" placeholder="Search loans..." onkeyup="searchLoans()">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="clearLoanFilters()">
+                            <i class="fas fa-times me-2"></i>Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Loans Table -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive" id="loans-table-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Transactions Tab -->
+    <div class="tab-pane fade" id="transactions" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4>💰 Transaction Management</h4>
+            <div class="btn-group">
+                <button class="btn btn-info" onclick="refreshTransactions()">
+                    <i class="fas fa-sync me-2"></i>Refresh
+                </button>
+                <button class="btn btn-outline-secondary" onclick="exportTransactions()">
+                    <i class="fas fa-download me-2"></i>Export
+                </button>
+            </div>
+        </div>
+        
+        <!-- Transaction Summary -->
+        <div class="row mb-3" id="transaction-summary-cards">
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+        </div>
+        
+        <!-- Transaction Filters -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2">
+                        <select class="form-select" id="transaction-status-filter" onchange="filterTransactions()">
+                            <option value="">All Status</option>
+                            <option value="completed">Completed</option>
+                            <option value="pending">Pending</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="transaction-method-filter" onchange="filterTransactions()">
+                            <option value="">All Methods</option>
+                            <option value="ecocash">EcoCash</option>
+                            <option value="onemoney">OneMoney</option>
+                            <option value="telecash">TeleCash</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="transaction-period-filter" onchange="filterTransactions()">
+                            <option value="">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" id="transaction-search" placeholder="Search transactions..." onkeyup="searchTransactions()">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="clearTransactionFilters()">
+                            <i class="fas fa-times me-2"></i>Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Transactions Table -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive" id="transactions-table-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Analytics Tab -->
+    <div class="tab-pane fade" id="analytics" role="tabpanel">
+        <h4 class="mb-4">📊 Advanced Analytics</h4>
+        
+        <!-- Analytics Cards -->
+        <div class="row mb-4" id="analytics-cards">
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+        </div>
+        
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📈 Loan Performance Trends</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="loanTrendsChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">🥧 Payment Method Distribution</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="paymentMethodChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📊 Collection Rate by Month</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="collectionRateChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">👥 Customer Growth</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="customerGrowthChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Security Tab -->
+    <div class="tab-pane fade" id="security" role="tabpanel">
+        <h4 class="mb-4">🔒 Security & Monitoring</h4>
+        
+        <!-- Security Overview -->
+        <div class="row mb-4" id="security-cards">
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+        </div>
+        
+        <!-- Login Attempts -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">🚨 Recent Login Attempts</h5>
+            </div>
+            <div class="card-body" id="login-attempts-table">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- System Health -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">💚 System Health Status</h5>
+            </div>
+            <div class="card-body" id="system-health">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">👤 Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" class="form-control" name="full_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" name="phone_number">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" name="role" required>
+                            <option value="customer">Customer</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitAddUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Loan Modal -->
+<div class="modal fade" id="addLoanModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🏦 Create New Loan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addLoanForm">
+                    <div class="mb-3">
+                        <label class="form-label">Customer</label>
+                        <select class="form-select" name="user_id" required>
+                            <option value="">Select Customer...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Loan Amount ($)</label>
+                        <input type="number" class="form-control" name="original_amount" step="0.01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Interest Rate (%)</label>
+                        <input type="number" class="form-control" name="interest_rate" step="0.01" value="15" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Term (Months)</label>
+                        <input type="number" class="form-control" name="term_months" value="12" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Disbursement Date</label>
+                        <input type="date" class="form-control" name="disbursement_date" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitAddLoan()">Create Loan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Dashboard JavaScript -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Global variables
+let currentData = {};
+let charts = {};
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDashboard();
+    bindTabEvents();
+});
+
+function initializeDashboard() {
+    loadOverviewData();
+    
+    // Load data for active tab
+    const activeTab = document.querySelector('.nav-link.active');
+    if (activeTab) {
+        handleTabChange(activeTab.id.replace('-tab', ''));
+    }
+}
+
+function bindTabEvents() {
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            const tabName = e.target.id.replace('-tab', '');
+            handleTabChange(tabName);
+        });
+    });
+}
+
+function handleTabChange(tabName) {
+    switch(tabName) {
+        case 'overview':
+            if (!currentData.overview) loadOverviewData();
+            break;
+        case 'users':
+            if (!currentData.users) loadUsersData();
+            break;
+        case 'loans':
+            if (!currentData.loans) loadLoansData();
+            break;
+        case 'transactions':
+            if (!currentData.transactions) loadTransactionsData();
+            break;
+        case 'analytics':
+            if (!currentData.analytics) loadAnalyticsData();
+            break;
+        case 'security':
+            if (!currentData.security) loadSecurityData();
+            break;
+    }
+}
+
+// Load Overview Data
+async function loadOverviewData() {
+    try {
+        const response = await fetch('/admin/enhanced/api/overview');
+        const data = await response.json();
+        
+        if (data.success) {
+            currentData.overview = data.data;
+            renderOverviewCards(data.data);
+            renderRecentActivity(data.data.recent_activity);
+            renderAlerts(data.data.alerts);
+            updateBadges(data.data);
+        }
+    } catch (error) {
+        console.error('Error loading overview data:', error);
+        showError('Failed to load overview data');
+    }
+}
+
+function renderOverviewCards(data) {
+    const container = document.getElementById('overview-cards');
+    container.innerHTML = `
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                    <h3 class="card-title">${data.total_users || 0}</h3>
+                    <p class="card-text text-muted">Total Users</p>
+                    <small class="text-success">+${data.new_users_this_month || 0} this month</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <i class="fas fa-hand-holding-usd fa-2x text-success mb-2"></i>
+                    <h3 class="card-title">${data.total_loans || 0}</h3>
+                    <p class="card-text text-muted">Total Loans</p>
+                    <small class="text-info">${data.active_loans || 0} active</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-info">
+                <div class="card-body text-center">
+                    <i class="fas fa-dollar-sign fa-2x text-info mb-2"></i>
+                    <h3 class="card-title">$${formatNumber(data.total_disbursed || 0)}</h3>
+                    <p class="card-text text-muted">Total Disbursed</p>
+                    <small class="text-warning">$${formatNumber(data.total_outstanding || 0)} outstanding</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                    <h3 class="card-title">${data.collection_rate || 0}%</h3>
+                    <p class="card-text text-muted">Collection Rate</p>
+                    <small class="text-success">${data.total_transactions || 0} transactions</small>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function updateBadges(data) {
+    document.getElementById('user-count-badge').textContent = data.total_users || 0;
+    document.getElementById('loan-count-badge').textContent = data.total_loans || 0;
+    document.getElementById('transaction-count-badge').textContent = data.total_transactions || 0;
+}
+
+// Load Users Data
+async function loadUsersData() {
+    try {
+        const response = await fetch('/admin/enhanced/api/users');
+        const data = await response.json();
+        
+        if (data.success) {
+            currentData.users = data.data;
+            renderUsersTable(data.data);
+        }
+    } catch (error) {
+        console.error('Error loading users data:', error);
+        showError('Failed to load users data');
+    }
+}
+
+function renderUsersTable(users) {
+    const container = document.getElementById('users-table-container');
+    const tableHTML = `
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${users.map(user => `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td><strong>${user.username}</strong></td>
+                        <td>${user.full_name || 'N/A'}</td>
+                        <td>${user.email || 'N/A'}</td>
+                        <td>${user.phone_number || 'N/A'}</td>
+                        <td><span class="badge bg-${user.role === 'admin' ? 'danger' : 'primary'}">${user.role}</span></td>
+                        <td><span class="badge bg-${user.is_active ? 'success' : 'secondary'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="editUser(${user.id})" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-outline-info" onclick="viewUserDetails(${user.id})" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                ${user.role !== 'admin' ? `
+                                <button class="btn btn-outline-${user.is_active ? 'warning' : 'success'}" 
+                                        onclick="toggleUserStatus(${user.id}, ${!user.is_active})" 
+                                        title="${user.is_active ? 'Deactivate' : 'Activate'}">
+                                    <i class="fas fa-${user.is_active ? 'ban' : 'check'}"></i>
+                                </button>
+                                ` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    container.innerHTML = tableHTML;
+}
+
+// Load Loans Data
+async function loadLoansData() {
+    try {
+        const response = await fetch('/admin/enhanced/api/loans');
+        const data = await response.json();
+        
+        if (data.success) {
+            currentData.loans = data.data;
+            renderLoanSummaryCards(data.data.summary);
+            renderLoansTable(data.data.loans);
+            loadCustomersForLoanForm();
+        }
+    } catch (error) {
+        console.error('Error loading loans data:', error);
+        showError('Failed to load loans data');
+    }
+}
+
+function renderLoanSummaryCards(summary) {
+    const container = document.getElementById('loan-summary-cards');
+    container.innerHTML = `
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h4>${summary.total_loans || 0}</h4>
+                    <p class="mb-0">Total Loans</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h4>${summary.active_loans || 0}</h4>
+                    <p class="mb-0">Active Loans</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h4>$${formatNumber(summary.total_disbursed || 0)}</h4>
+                    <p class="mb-0">Total Disbursed</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <h4>$${formatNumber(summary.total_outstanding || 0)}</h4>
+                    <p class="mb-0">Outstanding</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderLoansTable(loans) {
+    const container = document.getElementById('loans-table-container');
+    const tableHTML = `
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Loan ID</th>
+                    <th>Customer</th>
+                    <th>Amount</th>
+                    <th>Outstanding</th>
+                    <th>Progress</th>
+                    <th>Interest Rate</th>
+                    <th>Term</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${loans.map(loan => `
+                    <tr>
+                        <td><strong>${loan.loan_id}</strong></td>
+                        <td>${loan.customer_name}</td>
+                        <td>$${formatNumber(loan.original_amount)}</td>
+                        <td>$${formatNumber(loan.outstanding_balance)}</td>
+                        <td>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar" role="progressbar" style="width: ${loan.progress_percentage}%" 
+                                     aria-valuenow="${loan.progress_percentage}" aria-valuemin="0" aria-valuemax="100">
+                                    ${loan.progress_percentage.toFixed(1)}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>${loan.interest_rate}%</td>
+                        <td>${loan.term_months} months</td>
+                        <td><span class="badge bg-${getStatusColor(loan.status)}">${loan.status}</span></td>
+                        <td>${formatDate(loan.created_at)}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="viewLoanDetails(${loan.id})" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-success" onclick="showPaymentForm(${loan.id})" title="Payment">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </button>
+                                <button class="btn btn-outline-info" onclick="editLoan(${loan.id})" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    container.innerHTML = tableHTML;
+}
+
+// Utility Functions
+function formatNumber(num) {
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(num);
+}
+
+function formatDate(dateString) {
+    return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'active': 'success',
+        'completed': 'primary',
+        'defaulted': 'danger',
+        'pending': 'warning'
+    };
+    return colors[status] || 'secondary';
+}
+
+function showError(message) {
+    // Implement error display
+    console.error(message);
+}
+
+function showSuccess(message) {
+    // Implement success display
+    console.log(message);
+}
+
+// Action Functions
+function showAddUser() {
+    const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+    modal.show();
+}
+
+function showAddLoan() {
+    const modal = new bootstrap.Modal(document.getElementById('addLoanModal'));
+    modal.show();
+}
+
+function refreshAllData() {
+    currentData = {};
+    initializeDashboard();
+    showSuccess('Data refreshed successfully');
+}
+
+// Additional functions for user management, loan management, etc.
+// ... (implement as needed)
+
+</script>
+{% endblock %}

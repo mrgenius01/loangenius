@@ -15,7 +15,7 @@ export const API_CONFIG = {
   // For local development
   DEVELOPMENT_URL: 'http://192.168.137.1:5000',
   // Current environment
-  BASE_URL: 'http://192.168.137.1:5000', // Switch between PRODUCTION_URL and DEVELOPMENT_URL
+  BASE_URL: 'https://loangenius.onrender.com', // Switch between PRODUCTION_URL and DEVELOPMENT_URL
   TIMEOUT: 5000
 };
 

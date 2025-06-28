@@ -16,13 +16,16 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
   const [attempts, setAttempts] = useState(0);
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
-
   useEffect(() => {
-    if (visible) {
+    if (visible && transaction) {
       // Reset state when modal opens
       resetState();
+      // Automatically send OTP for OMari payments
+      if (transaction.method === 'omari') {
+        sendOtp();
+      }
     }
-  }, [visible]);
+  }, [visible, transaction]);
 
   const resetState = () => {
     setOtpCode('');
@@ -43,17 +46,13 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
     setOtpError('');
 
     try {
-      const response = await ApiService.requestOtp(transaction.reference);
-
-      if (response.success) {
+      const response = await ApiService.requestOtp(transaction.reference);      if (response.success) {
         setOtpSent(true);
-        Alert.alert(
-          'OTP Sent!',
-          'An OTP has been sent to your phone. Please enter it below to complete the payment.',
-          [{ text: 'OK' }]
-        );
+        // Don't show alert - just set the state
       } else {
         setOtpError(response.error || 'Failed to send OTP');
+        // Still allow OTP input in case user wants to try manual entry
+        setOtpSent(true);
       }
     } catch (error) {
       setOtpError('Failed to send OTP');
@@ -128,15 +127,14 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
       </View>
     </View>
   );
-
   const renderInstructions = () => (
     <View style={modalStyles.otpInstructions}>
       <Text style={modalStyles.instructionsTitle}>
-        {!otpSent ? 'Payment Steps:' : 'Enter OTP:'}
+        Enter OTP to Complete Payment
       </Text>
       <Text style={modalStyles.instructionsText}>
         {!otpSent 
-          ? `1. Click "Send OTP" to initiate the OMari payment\n2. You will receive an OTP on your phone\n3. Enter the OTP below to complete the payment\n4. Payment status will update automatically`
+          ? 'Sending OTP to your phone number...'
           : 'Enter the 6-digit OTP sent to your phone to complete the payment.'
         }
       </Text>
@@ -220,10 +218,9 @@ const OtpModal = ({ visible, onClose, transaction, onOtpSuccess }) => {
           </View>
 
           {renderTransactionDetails()}
-          {renderInstructions()}
-
-          <View style={modalStyles.otpActions}>
-            {!otpSent ? renderSendOtpButton() : renderOtpInput()}
+          {renderInstructions()}          <View style={modalStyles.otpActions}>
+            {/* Always show OTP input - simplified flow */}
+            {renderOtpInput()}
           </View>
 
           {attempts > 0 && attempts < OTP_CONFIG.MAX_ATTEMPTS && (

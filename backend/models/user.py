@@ -1,24 +1,37 @@
-"""User model for admin authentication."""
+"""User model for admin authentication and customer management."""
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from datetime import datetime
 from utils.database import db
 
 class User(UserMixin, db.Model):
-    """User model for admin authentication."""
+    """User model for admin authentication and customer management."""
     
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
-    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(120), unique=True, nullable=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='admin', nullable=False)
+    
+    # Enhanced user details
+    full_name = db.Column(db.String(100), nullable=True)
+    phone_number = db.Column(db.String(15), nullable=True, index=True)
+    
+    # User type and status
+    role = db.Column(db.String(20), default='admin', nullable=False)  # admin, customer
+    user_type = db.Column(db.String(20), default='admin', nullable=False)  # alias for role
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Security fields
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     last_login = db.Column(db.DateTime)
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime)
+    
+    # Relationships
+    loans = db.relationship('Loan', backref='customer', lazy='dynamic')
+    transactions = db.relationship('Transaction', backref='user', lazy='dynamic')
     
     def set_password(self, password):
         """Set password hash."""
@@ -28,6 +41,17 @@ class User(UserMixin, db.Model):
         """Check password against hash."""
         return check_password_hash(self.password_hash, password)
     
+    @property
+    def active_loans(self):
+        """Get active loans with outstanding balance."""
+        if self.role != 'customer':
+            return []
+        return [loan for loan in self.loans if loan.status == 'active' and loan.outstanding_balance > 0]
+    
+    @property
+    def total_outstanding(self):
+        """Get total outstanding amount."""
+        return sum(float(loan.outstanding_balance) for loan in self.active_loans)    
     def is_locked(self):
         """Check if account is locked."""
         if self.locked_until and self.locked_until > datetime.utcnow():
@@ -60,8 +84,13 @@ class User(UserMixin, db.Model):
             'id': self.id,
             'username': self.username,
             'email': self.email,
+            'full_name': self.full_name,
+            'phone_number': self.phone_number,
             'role': self.role,
+            'user_type': self.role,  # alias for compatibility
             'is_active': self.is_active,
+            'active_loans_count': len(self.active_loans) if self.role == 'customer' else None,
+            'total_outstanding': self.total_outstanding if self.role == 'customer' else None,
             'created_at': self.created_at.isoformat(),
             'last_login': self.last_login.isoformat() if self.last_login else None
         }
