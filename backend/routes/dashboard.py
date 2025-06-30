@@ -117,6 +117,65 @@ def get_dashboard_stats():
     except Exception as e:
         return error_response(f"Failed to get dashboard stats: {str(e)}", 500)
 
+@dashboard_bp.route('/api/overview')
+@api_admin_required
+@rate_limit(max_requests=30, window=60)
+def get_dashboard_overview():
+    """
+    Get comprehensive dashboard overview with users, loans, transactions and analytics
+    """
+    from models.loan import Loan
+    from models.user import User, LoginAttempt
+    from models.transaction import Transaction
+    from utils.database import db
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+
+    try:
+        # Date ranges
+        now = datetime.utcnow()
+        today = now.date()
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+
+        # Transaction stats
+        total_transactions = Transaction.query.count()
+        total_amount = float(db.session.query(func.sum(Transaction.amount)).scalar() or 0)
+        successful_payments = Transaction.query.filter_by(status='paid').count()
+        pending_payments = Transaction.query.filter(Transaction.status.in_(['pending','sent'])).count()
+        failed_payments = Transaction.query.filter_by(status='cancelled').count()
+        today_transactions = Transaction.query.filter(func.date(Transaction.created_at) == today).count()
+        today_amount = float(db.session.query(func.sum(Transaction.amount)).filter(func.date(Transaction.created_at) == today).scalar() or 0)
+
+        # User and loan stats
+        total_users = User.query.count()
+        total_loans = Loan.query.count()
+        active_loans = Loan.query.filter_by(status='active').count()
+
+        # Build response
+        data = {
+            'total_transactions': total_transactions,
+            'total_amount': total_amount,
+            'successful_payments': successful_payments,
+            'pending_payments': pending_payments,
+            'failed_payments': failed_payments,
+            'today_transactions': today_transactions,
+            'today_amount': today_amount,
+            'total_users': total_users,
+            'total_loans': total_loans,
+            'active_loans': active_loans
+        }
+        # Recent activity: last 5 loans
+        recent_loans = Loan.query.order_by(Loan.created_at.desc()).limit(5).all()
+        data['recent_activity'] = {
+            'loans': [loan.to_dict() for loan in recent_loans]
+        }
+        # Alerts placeholder
+        data['alerts'] = []
+        return success_response(data)
+    except Exception as e:
+        return error_response(f"Failed to get dashboard overview: {str(e)}", 500)
+
 @dashboard_bp.route('/api/transactions')
 @api_admin_required
 @rate_limit(max_requests=60, window=60)
@@ -268,3 +327,176 @@ def system_health():
     except Exception as e:
         print(f"System health check error: {e}")
         return error_response(f"Failed to get system health: {str(e)}", 500)
+
+# User Management
+@dashboard_bp.route('/api/users', methods=['GET'])
+@api_admin_required
+@rate_limit(max_requests=30, window=60)
+def admin_get_users():
+    """Get all users"""
+    from models.user import User
+    users = User.query.order_by(User.created_at.desc()).all()
+    return success_response([u.to_dict() for u in users])
+
+@dashboard_bp.route('/api/users', methods=['POST'])
+@api_admin_required
+@csrf_required
+def admin_create_user():
+    """Create a new user"""
+    data = request.get_json() or {}
+    from models.user import User
+    if not data.get('username') or not data.get('password'):
+        return error_response('Username and password are required', 400)
+    user = User(
+        username=data['username'], email=data.get('email'),
+        full_name=data.get('full_name'), phone_number=data.get('phone_number'),
+        role=data.get('role', 'customer'), user_type=data.get('role', 'customer'),
+        is_active=True
+    )
+    user.set_password(data['password'])
+    db.session.add(user)
+    db.session.commit()
+    return success_response(user.to_dict(), 201)
+
+@dashboard_bp.route('/api/users/<int:user_id>', methods=['PUT'])
+@api_admin_required
+@csrf_required
+def admin_update_user(user_id):
+    """Update user details"""
+    data = request.get_json() or {}
+    from models.user import User
+    user = User.query.get(user_id)
+    if not user:
+        return error_response('User not found', 404)
+    for field in ['email','full_name','phone_number','role','user_type']:
+        if field in data:
+            setattr(user, field, data[field])
+    if 'password' in data:
+        user.set_password(data['password'])
+    db.session.commit()
+    return success_response(user.to_dict())
+
+@dashboard_bp.route('/api/users/<int:user_id>/toggle-status', methods=['POST'])
+@api_admin_required
+@csrf_required
+def admin_toggle_user(user_id):
+    """Activate/deactivate a user"""
+    from models.user import User
+    user = User.query.get(user_id)
+    if not user:
+        return error_response('User not found', 404)
+    user.is_active = not user.is_active
+    db.session.commit()
+    return success_response({'id': user.id, 'is_active': user.is_active})
+
+# Loan Management
+@dashboard_bp.route('/api/loans', methods=['GET'])
+@api_admin_required
+@rate_limit(max_requests=30, window=60)
+def admin_get_loans():
+    """Get all loans with summary"""
+    from models.loan import Loan
+    loans = Loan.query.order_by(Loan.created_at.desc()).all()
+    data = [l.to_dict() for l in loans]
+    summary = {
+        'total_loans': len(data),
+        'active_loans': len([l for l in data if l['status']=='active']),
+        'completed_loans': len([l for l in data if l['status']=='completed'])
+    }
+    return success_response({'loans': data, 'summary': summary})
+
+@dashboard_bp.route('/api/loans', methods=['POST'])
+@api_admin_required
+@csrf_required
+def admin_create_loan():
+    """Create a new loan"""
+    data = request.get_json() or {}
+    from models.loan import Loan
+    from models.user import User
+    # Validate
+    user = User.query.get(data.get('user_id'))
+    if not user:
+        return error_response('Customer not found',404)
+    loan = Loan(
+        user_id=user.id,
+        original_amount=data['original_amount'],
+        interest_rate=data.get('interest_rate',15),
+        term_months=data.get('term_months',12),
+        disbursement_date=data.get('disbursement_date')
+    )
+    db.session.add(loan)
+    db.session.commit()
+    return success_response(loan.to_dict(),201)
+
+@dashboard_bp.route('/api/loans/<int:loan_id>', methods=['PUT'])
+@api_admin_required
+@csrf_required
+def admin_update_loan(loan_id):
+    """Update loan details"""
+    data = request.get_json() or {}
+    from models.loan import Loan
+    loan = Loan.query.get(loan_id)
+    if not loan:
+        return error_response('Loan not found',404)
+    for field in ['interest_rate','term_months','status']:
+        if field in data:
+            setattr(loan, field, data[field])
+    db.session.commit()
+    return success_response(loan.to_dict())
+
+# Transaction Management
+@dashboard_bp.route('/api/transactions', methods=['GET'])
+@api_admin_required
+@rate_limit(max_requests=60, window=60)
+def admin_get_transactions():
+    """Get paginated transactions with loan info"""
+    from models.transaction import Transaction
+    from models.loan import Loan
+    from sqlalchemy import desc
+    page = request.args.get('page',1,type=int)
+    per_page = min(request.args.get('per_page',20,type=int),100)
+    qry = Transaction.query.order_by(desc(Transaction.created_at))
+    pagination = qry.paginate(page=page, per_page=per_page, error_out=False)
+    items = []
+    for t in pagination.items:
+        td = t.to_dict()
+        if t.loan:
+            td['loan'] = t.loan.to_dict()
+        items.append(td)
+    return success_response({'transactions':items,'pagination':{
+        'page':page,'per_page':per_page,'total':pagination.total,'pages':pagination.pages
+    }})
+
+@dashboard_bp.route('/api/payments', methods=['POST'])
+@api_admin_required
+@csrf_required
+def admin_process_payment():
+    """Process loan payment"""
+    from models.transaction import Transaction
+    from models.loan import Loan
+    from utils.validators import PaymentValidator
+    errors = []
+    data = request.get_json() or {}
+    try:
+        loan_id = int(data.get('loan_id'))
+        amount = PaymentValidator.validate_amount(data.get('amount'))
+        phone = PaymentValidator.validate_phone_number(data.get('phone_number'))
+        method = PaymentValidator.validate_method(data.get('method'))
+    except Exception as e:
+        return error_response(str(e),400)
+    loan = Loan.query.get(loan_id)
+    if not loan:
+        return error_response('Loan not found',404)
+    if amount>loan.outstanding_balance:
+        return error_response('Amount exceeds balance',400)
+    tx = Transaction(
+        user_id=loan.user_id, loan_id=loan.id,
+        amount=amount, phone_number=phone, method=method,
+        transaction_type='loan_payment'
+    )
+    db.session.add(tx)
+    db.session.commit()
+    # Trigger payment_service asynchronously if set
+    if payment_service:
+        payment_service.process_transaction(tx.reference)
+    return success_response(tx.to_dict(),201)

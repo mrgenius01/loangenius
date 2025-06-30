@@ -184,77 +184,29 @@ def get_loan_details(loan_id):
 @login_required
 def make_payment(loan_id):
     """Make a payment for a specific loan."""
+    from utils.validators import PaymentValidator
+    from models.loan import Loan
+    from models.transaction import Transaction
+    from services.payment_service import PaymentService
+    data = request.get_json() or {}
     try:
-        if current_user.role != 'customer':
-            return APIResponse.error('Access denied', 403)
-        
-        data = request.get_json()
-        if not data:
-            return APIResponse.validation_error('No payment data provided')
-        
-        # Validate inputs
-        try:
-            amount = PaymentValidator.validate_amount(data.get('amount'))
-            phone_number = PaymentValidator.validate_phone_number(data.get('phone_number'))
-            method = PaymentValidator.validate_method(data.get('method', 'ecocash'))
-        except ValidationError as e:
-            return APIResponse.validation_error(str(e))
-        
-        # Find loan
-        loan = Loan.query.filter_by(
-            loan_id=loan_id, 
-            user_id=current_user.id,
-            status='active'
-        ).first()
-        
-        if not loan:
-            return APIResponse.not_found('Active loan not found')
-        
-        # Check amount against outstanding balance
-        if amount > float(loan.outstanding_balance):
-            return APIResponse.validation_error(
-                f'Amount ${amount} exceeds outstanding balance ${loan.outstanding_balance}'
-            )
-        
-        # Create transaction
-        transaction = Transaction(
-            user_id=current_user.id,
-            loan_id=loan.id,
-            phone_number=phone_number,
-            amount=amount,
-            method=method,
-            transaction_type='loan_payment',
-            description=f'Payment for loan {loan_id}'
-        )
-        
-        db.session.add(transaction)
-        db.session.commit()
-        
-        # Process with payment service
-        result = payment_service.create_payment(phone_number, amount, method)
-        
-        if result.get('status') == 'success':
-            # Update transaction with payment gateway details
-            if 'data' in result:
-                payment_data = result['data']
-                transaction.paynow_reference = payment_data.get('paynow_reference')
-                transaction.poll_url = payment_data.get('poll_url')
-                transaction.redirect_url = payment_data.get('redirect_url')
-                transaction.remoteotpurl = payment_data.get('remoteotpurl')
-                transaction.instructions = payment_data.get('instructions')
-                db.session.commit()
-        
-        return APIResponse.success({
-            'transaction': transaction.to_dict(),
-            'payment_result': result,
-            'loan': loan.to_dict()
-        })
-        
-    except ValidationError as e:
-        return APIResponse.validation_error(str(e))
+        amount = PaymentValidator.validate_amount(data.get('amount'))
+        phone = PaymentValidator.validate_phone_number(data.get('phone_number'))
+        method = PaymentValidator.validate_method(data.get('method'))
     except Exception as e:
-        db.session.rollback()
-        return APIResponse.internal_error(f'Payment failed: {str(e)}')
+        return APIResponse.validation_error(str(e))
+    loan = Loan.query.filter_by(loan_id=loan_id, user_id=current_user.id).first()
+    if not loan:
+        return APIResponse.not_found('Loan not found')
+    if amount > loan.outstanding_balance:
+        return APIResponse.error('Amount exceeds balance',400)
+    tx = Transaction(user_id=current_user.id, loan_id=loan.id, amount=amount, phone_number=phone, method=method, transaction_type='loan_payment')
+    db.session.add(tx)
+    db.session.commit()
+    # initiate external process
+    if payment_service:
+        payment_service.process_transaction(tx.reference)
+    return APIResponse.success(tx.to_dict(), 'Payment initiated',201)
 
 @customer_bp.route('/transactions', methods=['GET'])
 @login_required

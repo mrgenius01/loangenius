@@ -13,7 +13,7 @@ from routes.payment import init_payment_routes
 from routes.transaction import init_transaction_routes
 from routes.webhook import init_webhook_routes
 from routes.customer import init_customer_routes, customer_bp
-from routes.loan_dashboard import enhanced_dashboard_bp
+from routes.dashboard import dashboard_bp
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -79,8 +79,8 @@ def create_app(config_name=None):
     # Register customer management blueprint
     app.register_blueprint(customer_bp)
     
-    # Register enhanced dashboard blueprint
-    app.register_blueprint(enhanced_dashboard_bp)
+    # Register admin dashboard blueprint
+    app.register_blueprint(dashboard_bp)
     
     # Register existing blueprints
     for blueprint in blueprints:
