@@ -1012,8 +1012,122 @@ function refreshAllData() {
     showSuccess('Data refreshed successfully');
 }
 
-// Additional functions for user management, loan management, etc.
-// ... (implement as needed)
+// Additional Action Handlers
 
+// Load customer list into loan form
+async function loadCustomersForLoanForm() {
+    try {
+        const response = await fetch('/admin/api/users');
+        const result = await response.json();
+        if (result.status === 'success') {
+            const customers = result.data.filter(u => u.role === 'customer');
+            const select = document.querySelector('#addLoanForm select[name="user_id"]');
+            select.innerHTML = '<option value="">Select Customer...</option>' +
+                customers.map(c => `<option value="${c.id}">${c.full_name || c.username}</option>`).join('');
+        }
+    } catch (e) {
+        console.error('Error loading customers:', e);
+    }
+}
+
+// Show user details
+async function viewUserDetails(userId) {
+    try {
+        const response = await fetch(`/admin/api/users/${userId}`);
+        const result = await response.json();
+        if (result.status === 'success') {
+            const u = result.data;
+            alert(`User Details:\nUsername: ${u.username}\nEmail: ${u.email}\nFull Name: ${u.full_name}`);
+        }
+    } catch (e) { console.error(e); }
+}
+
+// Edit user (prefill form and show modal)
+async function editUser(userId) {
+    try {
+        const response = await fetch(`/admin/api/users/${userId}`);
+        const result = await response.json();
+        if (result.status === 'success') {
+            const u = result.data;
+            const form = document.getElementById('addUserForm');
+            form.username.value = u.username;
+            form.email.value = u.email;
+            form.full_name.value = u.full_name;
+            form.phone_number.value = u.phone_number;
+            form.role.value = u.role;
+            // Store id for submit
+            form.dataset.editUserId = userId;
+            const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+            modal.show();
+        }
+    } catch (e) { console.error(e); }
+}
+
+// Toggle user active status
+async function toggleUserStatus(userId) {
+    try {
+        const response = await fetch(`/admin/api/users/${userId}/toggle-status`, { method: 'POST' });
+        const result = await response.json();
+        if (result.status === 'success') {
+            loadUsersData();
+        }
+    } catch (e) { console.error(e); }
+}
+
+// Submit add/edit user form
+async function submitAddUser() {
+    const form = document.getElementById('addUserForm');
+    const data = {
+        username: form.username.value,
+        email: form.email.value,
+        full_name: form.full_name.value,
+        phone_number: form.phone_number.value,
+        role: form.role.value,
+        password: form.password.value
+    };
+    const editId = form.dataset.editUserId;
+    const url = editId ? `/admin/api/users/${editId}` : '/admin/api/users';
+    const method = editId ? 'PUT' : 'POST';
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+            loadUsersData();
+        } else {
+            showError(result.message);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// Submit add loan form
+async function submitAddLoan() {
+    const form = document.getElementById('addLoanForm');
+    const data = Object.fromEntries(new FormData(form));
+    try {
+        const response = await fetch('/admin/api/loans', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            bootstrap.Modal.getInstance(document.getElementById('addLoanModal')).hide();
+            loadLoansData();
+        } else {
+            showError(result.message);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// ...existing code...
 </script>
 {% endblock %}
