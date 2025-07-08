@@ -16,6 +16,7 @@ def init_db(app):
         # Create all tables
         db.create_all()
         print("Database tables created successfully")
+        
 
 def reset_db():
     """Reset database (drop all tables and recreate)."""

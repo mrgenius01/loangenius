@@ -121,11 +121,11 @@ def migrate_mysql_schema():
                 except Exception as e:
                     print(f"  ℹ️  Transactions table check: {e}")
                 
-                # Create loans table if it doesn't exist
-                print("🏦 Creating loans table...")
+                # Create mg_loans table if it doesn't exist
+                print("🏦 Creating mg_loans table...")
                 try:
-                    # Check if loans table exists
-                    result = conn.execute("SHOW TABLES LIKE 'loans'")
+                    # Check if mg_loans table exists
+                    result = conn.execute("SHOW TABLES LIKE 'mg_loans'")
                     if result.fetchone() is None:
                         create_loans_sql = """
                         CREATE TABLE loans (

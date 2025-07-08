@@ -5,13 +5,13 @@ from decimal import Decimal
 
 class Loan(db.Model):
     """Loan model for tracking customer loans."""
-    __tablename__ = 'loans'
+    __tablename__ = 'mg_loans'
     
     id = db.Column(db.Integer, primary_key=True)
     loan_id = db.Column(db.String(20), unique=True, nullable=False, index=True)
     
     # Foreign key
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('mg_users.id'), nullable=False, index=True)
       # Core loan details
     original_amount = db.Column(db.Numeric(10, 2), nullable=False)    # Total loan amount
     outstanding_balance = db.Column(db.Numeric(10, 2), nullable=False)  # Amount still owed

@@ -4,14 +4,128 @@ from datetime import datetime
 from models.transaction import Transaction
 from services.paynow_service import PaynowService
 from utils.database import db
-
+import os
 class PaymentService:
     """Service class for payment business logic."""
     
     def __init__(self, paynow_service):
         """Initialize payment service with Paynow service."""
         self.paynow_service = paynow_service
+        
+        # If no paynow_service provided, try to create one
+        if not self.paynow_service:
+            try:
+                # Get configuration from environment variables or use defaults
+                integration_id = os.getenv('PAYNOW_INTEGRATION_ID', 'YOUR_INTEGRATION_ID')
+                integration_key = os.getenv('PAYNOW_INTEGRATION_KEY', 'YOUR_INTEGRATION_KEY')
+                return_url = os.getenv('PAYNOW_RETURN_URL', 'http://localhost:5000/payment/return')
+                result_url = os.getenv('PAYNOW_RESULT_URL', 'http://localhost:5000/payment/result')
+                
+                # Initialize PaynowService with proper parameters
+                self.paynow_service = PaynowService(
+                    integration_id=integration_id,
+                    integration_key=integration_key,
+                    return_url=return_url,
+                    result_url=result_url
+                )
+                print("PaynowService initialized successfully")
+                
+                # Check if we have real credentials
+                if integration_id == 'YOUR_INTEGRATION_ID':
+                    print("Warning: Using default/test Paynow credentials")
+                else:
+                    print(f"PaynowService initialized with integration ID: {integration_id}")
+                    
+            except Exception as e:
+                print(f"Failed to initialize PaynowService: {e}")
+                self.paynow_service = None
     
+    def process_transaction(self, transaction_reference):
+        """Process a transaction using its reference.
+        
+        Args:
+            transaction_reference (str): The transaction reference to process
+            
+        Returns:
+            dict: Processing result
+        """
+        try:
+            # Find the transaction
+            transaction = Transaction.query.filter_by(reference=transaction_reference).first()
+            if not transaction:
+                return {
+                    'status': 'error',
+                    'message': f'Transaction not found: {transaction_reference}'
+                }
+            
+            # Check if already processed
+            if transaction.status in ['paid', 'completed']:
+                return {
+                    'status': 'success',
+                    'message': 'Transaction already completed',
+                    'transaction_id': transaction.id,
+                    'reference': transaction.reference,
+                    'amount': float(transaction.amount),
+                    'status_code': transaction.status
+                }
+            
+            # Process the payment using existing create_payment logic
+            result= self.create_payment(
+                transaction.phone_number,
+                float(transaction.amount),
+                transaction.method
+            )
+            # debug results
+            if result.get('status') == 'success':
+                # Update the original transaction with the new processing data
+                transaction.poll_url = result.get('poll_url')
+                transaction.instructions = result.get('instructions')
+                transaction.paynow_reference = result.get('paynow_reference')
+                transaction.redirect_url = result.get('redirect_url', '')
+                
+                # Handle OMari-specific fields
+                if transaction.method == 'omari':
+                    transaction.remoteotpurl = result.get('remoteotpurl')
+                    transaction.otpreference = result.get('otpreference')
+                
+                transaction.status = 'sent'  # Update status to sent
+                db.session.commit()
+                
+                return {
+                    'status': 'success',
+                    'message': 'Transaction processed successfully',
+                    'transaction_id': transaction.id,
+                    'reference': transaction.reference,
+                    'amount': float(transaction.amount),
+                    'poll_url': result.get('poll_url'),
+                    'instructions': result.get('instructions'),
+                    'paynow_reference': result.get('paynow_reference'),
+                    'redirect_url': result.get('redirect_url'),
+                    'has_redirect': result.get('has_redirect', False),
+                    'remoteotpurl': result.get('remoteotpurl'),
+                    'otpreference': result.get('otpreference')
+                }
+            else:
+                # Processing failed
+                transaction.status = 'failed'
+                db.session.commit()
+                
+                return {
+                    'status': 'error',
+                    'message': result.get('message', 'Transaction processing failed'),
+                    'errors': result.get('errors', []),
+                    'transaction_id': transaction.id,
+                    'reference': transaction.reference
+                }
+                
+        except Exception as e:
+            db.session.rollback()
+            return {
+                'status': 'error',
+                'message': f'Transaction processing failed: {str(e)}',
+                'reference': transaction_reference
+            }
+
     def create_payment(self, phone_number, amount, method):
         """Create a new payment transaction.
         
@@ -31,7 +145,7 @@ class PaymentService:
             paynow_response = self.paynow_service.create_payment(
                 reference, amount, phone_number, method
             )
-            
+            print(f"payniw response {paynow_response}")
             if paynow_response.success:
                 # Get instructions
                 instructions = paynow_response.get_instructions()
@@ -182,6 +296,14 @@ class PaymentService:
             
             if hasattr(status, 'paid') and status.paid:
                 transaction.paid_at = datetime.utcnow()
+                
+                # Update loan balance if this is a loan payment
+                if transaction.loan_id and transaction.loan:
+                    loan = transaction.loan
+                    loan.outstanding_balance -= transaction.amount
+                    if loan.outstanding_balance <= 0:
+                        loan.status = 'completed'
+                        loan.outstanding_balance = 0
             
             db.session.commit()
             
@@ -191,7 +313,8 @@ class PaymentService:
                 "paid": bool(getattr(status, 'paid', False)),
                 "amount": transaction.amount,
                 "method": transaction.method,
-                "created_at": transaction.created_at.isoformat() if transaction.created_at else None
+                "created_at": transaction.created_at.isoformat() if transaction.created_at else None,
+                "loan_balance_updated": bool(transaction.loan_id and getattr(status, 'paid', False))
             }
         
         except Exception as e:
@@ -285,6 +408,15 @@ class PaymentService:
                 transaction = Transaction.query.filter_by(reference=reference).first()
                 if transaction:
                     transaction.set_paynow_result(result_data)
+                    
+                    # Update loan balance if payment is completed
+                    if result_data.get('paynowreference') == 'Paid' and transaction.loan_id:
+                        loan = transaction.loan
+                        loan.outstanding_balance -= transaction.amount
+                        if loan.outstanding_balance <= 0:
+                            loan.status = 'completed'
+                            loan.outstanding_balance = 0
+                    
                     db.session.commit()
                     print(f"Transaction {reference} updated with Paynow result")
                     return True

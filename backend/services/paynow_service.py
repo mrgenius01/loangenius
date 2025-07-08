@@ -56,7 +56,7 @@ class PaynowService:
                 response = self.paynow.create_checkout(payment)
         else:
             raise ValueError(f"Unsupported payment method: {method}")
-        
+        print(f"response of paynow {response}")
         return PaynowResponse(response, method)
     
     def check_transaction_status(self, poll_url):

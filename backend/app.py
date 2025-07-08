@@ -209,16 +209,6 @@ def create_sample_data():
 def startup_check(app):
     """Perform enhanced startup checks."""
     with app.app_context():
-        print("="*60)
-        print("🚀 Enhanced Loan Repayment Backend Starting...")
-        print(f"📊 Environment: {app.config.get('ENV', 'development')}")
-        print(f"🔧 Debug Mode: {app.config['DEBUG']}")
-        print(f"💳 Paynow Integration ID: {app.config['PAYNOW_INTEGRATION_ID']}")
-        print(f"🔐 Security: Authentication enabled")
-        print(f"🏦 Loan Management: Enabled")
-        print(f"👥 Customer Portal: /customer/*")
-        print(f"📈 Enhanced Dashboard: /admin/enhanced/*")
-        print(f"✅ Credentials Configured: {get_config().credentials_configured}")
         
         if not get_config().credentials_configured:
             print("⚠️  WARNING: Paynow credentials not configured!")
@@ -249,13 +239,6 @@ def main():
     """Run the enhanced application in development mode."""
     app = create_app()
     
-    print("Starting Enhanced Loan Repayment Backend...")
-    print("\n📋 Available Endpoints:")
-    print("🔐 Admin: /admin/ (existing admin dashboard)")
-    print("📈 Enhanced Admin: /admin/enhanced/ (new loan management)")
-    print("👥 Customer API: /customer/ (mobile app endpoints)")
-    print("💳 Payment API: /payment/ (payment processing)")
-    print("📊 Transaction API: /transaction/ (transaction management)")
     print("\nMake sure to set your Paynow credentials in environment variables:")
     print("- PAYNOW_INTEGRATION_ID")
     print("- PAYNOW_INTEGRATION_KEY")

@@ -41,13 +41,13 @@ def check_and_update_schema():
                     tables = [row[0] for row in result.fetchall()]
                     print(f"  Existing tables: {tables}")
                     
-                    # Check users table structure
-                    if 'users' in tables:
-                        result = conn.execute("PRAGMA table_info(users)")
+                    # Check mg_users table structure
+                    if 'mg_users' in tables:
+                        result = conn.execute("PRAGMA table_info(mg_users)")
                         columns = [row[1] for row in result.fetchall()]
-                        print(f"  Users table columns: {columns}")
+                        print(f"  MG Users table columns: {columns}")
                         
-                        # Add missing columns to users table
+                        # Add missing columns to mg_users table
                         missing_columns = [
                             ('full_name', 'VARCHAR(100)'),
                             ('phone_number', 'VARCHAR(15)'),
@@ -62,27 +62,27 @@ def check_and_update_schema():
                         for col_name, col_def in missing_columns:
                             if col_name not in columns:
                                 try:
-                                    conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}")
-                                    print(f"  ✓ Added {col_name} column to users table")
+                                    conn.execute(f"ALTER TABLE mg_users ADD COLUMN {col_name} {col_def}")
+                                    print(f"  ✓ Added {col_name} column to mg_users table")
                                 except Exception as e:
                                     print(f"  ⚠️  Could not add {col_name}: {e}")
                         
                         # Update existing users to have default role
-                        conn.execute("UPDATE users SET role = 'admin' WHERE role IS NULL")
-                        conn.execute("UPDATE users SET user_type = 'admin' WHERE user_type IS NULL")
-                        conn.execute("UPDATE users SET is_active = 1 WHERE is_active IS NULL")
-                        conn.execute("UPDATE users SET failed_login_attempts = 0 WHERE failed_login_attempts IS NULL")
-                        print("  ✓ Updated existing users with default values")
+                        conn.execute("UPDATE mg_users SET role = 'admin' WHERE role IS NULL")
+                        conn.execute("UPDATE mg_users SET user_type = 'admin' WHERE user_type IS NULL")
+                        conn.execute("UPDATE mg_users SET is_active = 1 WHERE is_active IS NULL")
+                        conn.execute("UPDATE mg_users SET failed_login_attempts = 0 WHERE failed_login_attempts IS NULL")
+                        print("  ✓ Updated existing mg_users with default values")
                 
                 elif dialect == 'mysql':
                     # MySQL approach - similar but different syntax
                     print("  Using MySQL database")
                     
-                    # Check users table structure
+                    # Check mg_users table structure
                     try:
-                        result = conn.execute("DESCRIBE users")
+                        result = conn.execute("DESCRIBE mg_users")
                         columns = [row[0] for row in result.fetchall()]
-                        print(f"  Users table columns: {columns}")
+                        print(f"  MG Users table columns: {columns}")
                         
                         # Add missing columns
                         missing_columns = [
@@ -99,13 +99,13 @@ def check_and_update_schema():
                         for col_name, col_def in missing_columns:
                             if col_name not in columns:
                                 try:
-                                    conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}")
-                                    print(f"  ✓ Added {col_name} column to users table")
+                                    conn.execute(f"ALTER TABLE mg_users ADD COLUMN {col_name} {col_def}")
+                                    print(f"  ✓ Added {col_name} column to mg_users table")
                                 except Exception as e:
                                     print(f"  ⚠️  Could not add {col_name}: {e}")
                     
                     except Exception as e:
-                        print(f"  ⚠️  Could not analyze users table: {e}")
+                        print(f"  ⚠️  Could not analyze mg_users table: {e}")
                 
                 # Commit the schema changes
                 conn.commit()
@@ -125,22 +125,22 @@ def check_and_update_schema():
             
             try:
                 user_count = User.query.count()
-                print(f"  ✓ Users table: {user_count} records")
+                print(f"  ✓ MG Users table: {user_count} records")
             except Exception as e:
-                print(f"  ✗ Users table error: {e}")
+                print(f"  ✗ MG Users table error: {e}")
                 return False
             
             try:
                 loan_count = Loan.query.count()
-                print(f"  ✓ Loans table: {loan_count} records")
+                print(f"  ✓ MG Loans table: {loan_count} records")
             except Exception as e:
-                print(f"  ✓ Loans table: 0 records (new table)")
+                print(f"  ✓ MG Loans table: 0 records (new table)")
             
             try:
                 transaction_count = Transaction.query.count()
-                print(f"  ✓ Transactions table: {transaction_count} records")
+                print(f"  ✓ MG Transactions table: {transaction_count} records")
             except Exception as e:
-                print(f"  ✓ Transactions table: 0 records (accessible)")
+                print(f"  ✓ MG Transactions table: 0 records (accessible)")
             
             # Check if we need to create an admin user
             admin_count = User.query.filter_by(role='admin').count()
@@ -162,8 +162,8 @@ def check_and_update_schema():
             print("\n✅ Database schema update completed!")
             print("="*50)
             print("🎯 Your database now has:")
-            print("  ✓ All required columns in users table")
-            print("  ✓ New loans and login_attempts tables")
+            print("  ✓ All required columns in mg_users table")
+            print("  ✓ New mg_loans and mg_login_attempts tables")
             print("  ✓ Proper db.Numeric decimal field types")
             print("  ✓ Working relationships between tables")
             print("\n🚀 You can now run the application with: python app.py")

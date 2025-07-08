@@ -1,3 +1,5 @@
+# Update the auth.py file - remove the duplicate route and fix the setup logic
+
 """Authentication routes."""
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_user, logout_user, current_user, login_required
@@ -32,6 +34,7 @@ def login():
     # Validate input
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400    
+    
     # Authenticate
     result = AuthService.authenticate_user(
         username=username,
@@ -77,51 +80,100 @@ def get_current_user():
 
 @auth_bp.route('/setup', methods=['GET', 'POST'])
 def setup():
-    """Initial admin setup (only if no users exist)."""
-    if User.query.count() > 0:
-        return redirect('/auth/login')
+    """Initial admin setup - works whether users exist or not."""
     
     if request.method == 'GET':
+        # Show setup form regardless of existing users
         csrf_token = AuthService.generate_csrf_token()
-        return render_template('auth/setup.html', csrf_token=csrf_token)
+        
+        # Check if any admin exists
+        admin_exists = User.query.filter_by(role='admin').first() is not None
+        total_users = User.query.count()
+        
+        return render_template('auth/setup.html', 
+                             csrf_token=csrf_token, 
+                             admin_exists=admin_exists,
+                             total_users=total_users)
     
-    # Create initial admin user
-    username = request.form.get('username', '').strip()
-    email = request.form.get('email', '').strip()
-    password = request.form.get('password')
-    confirm_password = request.form.get('confirm_password')
-    csrf_token = request.form.get('csrf_token')
-    
-    # Validate CSRF token
-    if not AuthService.validate_csrf_token(csrf_token):
-        return jsonify({'error': 'Invalid CSRF token'}), 403
-    
-    # Validate input
-    errors = []
-    if not username or len(username) < 3:
-        errors.append('Username must be at least 3 characters')
-    if not email or '@' not in email:
-        errors.append('Valid email is required')
-    if not password or len(password) < 8:
-        errors.append('Password must be at least 8 characters')
-    if password != confirm_password:
-        errors.append('Passwords do not match')
-    
-    if errors:
-        return jsonify({'error': '; '.join(errors)}), 400
-      # Create admin user
-    result = AuthService.create_admin_user(username, email, password)
-    
-    if result['success']:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return success_response({'message': 'Admin user created successfully'})
+    try:
+        # Get form data
+        data = request.get_json() if request.is_json else request.form
+        
+        # Validate CSRF token
+        csrf_token = data.get('csrf_token')
+        if not AuthService.validate_csrf_token(csrf_token):
+            return jsonify({'error': 'Invalid CSRF token'}), 403
+        
+        # Validate required fields
+        required_fields = ['username', 'email', 'password', 'full_name']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+        
+        # Check if username already exists
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({'error': f'Username "{data["username"]}" already exists'}), 400
+        
+        # Check if email already exists
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'error': f'Email "{data["email"]}" already exists'}), 400
+        
+        # Validate password length
+        if len(data['password']) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+        
+        # Create admin user
+        admin = User(
+            username=data['username'],
+            email=data['email'],
+            full_name=data['full_name'],
+            phone_number=data.get('phone_number', ''),
+            role='admin',
+            user_type='admin',
+            is_active=True
+        )
+        
+        admin.set_password(data['password'])
+        
+        db.session.add(admin)
+        db.session.commit()
+        
+        print(f"✅ Admin user created: {admin.username} (ID: {admin.id})")
+        
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'message': 'Admin user created successfully',
+                'admin_id': admin.id,
+                'username': admin.username
+            }), 201
         else:
-            flash('Admin user created successfully. Please login.', 'success')
-            return redirect('/auth/login')
-    else:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return error_response(result['message'], 400)
+            flash('Admin user created successfully! You can now login.', 'success')
+            return redirect(url_for('auth.login'))
+            
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to create admin: {e}")
+        
+        error_msg = f'Error creating admin: {str(e)}'
+        
+        if request.is_json:
+            return jsonify({'error': error_msg}), 500
         else:
-            flash(result['message'], 'error')
+            flash(error_msg, 'error')
             csrf_token = AuthService.generate_csrf_token()
-            return render_template('auth/setup.html', csrf_token=csrf_token, error=result['message'])
+            return render_template('auth/setup.html', csrf_token=csrf_token, error=error_msg)
+
+@auth_bp.route('/check-setup')
+def check_setup():
+    """Check setup status."""
+    admin_count = User.query.filter_by(role='admin').count()
+    total_users = User.query.count()
+    
+    return jsonify({
+        'admin_exists': admin_count > 0,
+        'admin_count': admin_count,
+        'total_users': total_users,
+        'setup_needed': admin_count == 0
+    })

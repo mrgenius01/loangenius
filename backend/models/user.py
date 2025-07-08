@@ -7,7 +7,7 @@ from utils.database import db
 class User(UserMixin, db.Model):
     """User model for admin authentication and customer management."""
     
-    __tablename__ = 'users'
+    __tablename__ = 'mg_users'
     
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
@@ -98,7 +98,7 @@ class User(UserMixin, db.Model):
 class LoginAttempt(db.Model):
     """Track login attempts for security monitoring."""
     
-    __tablename__ = 'login_attempts'
+    __tablename__ = 'mg_login_attempts'
     
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False, index=True)

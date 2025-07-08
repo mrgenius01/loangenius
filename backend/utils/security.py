@@ -58,6 +58,7 @@ def csrf_required(f):
     def decorated_function(*args, **kwargs):
         if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
             token = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token')
+            print(f"CSRF Token: {token}")  # Debugging line to check CSRF token
             if not AuthService.validate_csrf_token(token):
                 # Check if this is an API request
                 if (request.is_json or 

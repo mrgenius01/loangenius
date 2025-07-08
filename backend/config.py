@@ -1,7 +1,7 @@
 """Application configuration settings."""
 import os
 from dotenv import load_dotenv
-
+from urllib.parse import quote_plus
 # Load environment variables
 load_dotenv()
 
@@ -12,24 +12,39 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     
-    # Database settings - MySQL Remote
-    MYSQL_HOST = os.getenv('MYSQL_HOST', '')
-    MYSQL_DATABASE = os.getenv('MYSQL_DATABASE', '')
-    MYSQL_USER = os.getenv('MYSQL_USER', '')
-    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', '')
-    MYSQL_PORT = int(os.getenv('MYSQL_PORT', ''))
+    USE_SQLITE = os.getenv('USE_SQLITE', 'false').lower() == 'true'
     
-    # Construct MySQL connection string
-    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+    if USE_SQLITE:
+        # SQLite configuration for development
+        basedir = os.path.abspath(os.path.dirname(__file__))
+        SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(basedir, os.getenv("SQLITE_DATABASE_PATH", "instance/loan_mg.db"))}'
+        print(f"Using SQLite: {SQLALCHEMY_DATABASE_URI}")
+    else:
+        # SQL Server configuration
+        server = os.getenv('MYSQL_HOST')  # Actually SQL Server
+        database = os.getenv('MYSQL_DATABASE')
+        username = os.getenv('MYSQL_USER')
+        password = os.getenv('MYSQL_PASSWORD')
+        port = os.getenv('MYSQL_PORT', '1433')
+        
+        # URL encode password to handle special characters
+        encoded_password = quote_plus(password) if password else ''
+        
+        # SQL Server connection string
+        SQLALCHEMY_DATABASE_URI = (
+            f"mssql+pyodbc://{username}:{encoded_password}@{server}:{port}/{database}"
+            f"?driver=ODBC+Driver+18+for+SQL+Server"
+            f"&Encrypt=yes"
+            f"&TrustServerCertificate=no"
+        )
+        print(f"Using SQL Server: {server}/{database}")
+    
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_timeout': 30,
+        'pool_recycle': 3600,
         'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'connect_args': {
-            'connect_timeout': 60,
-            'read_timeout': 60,
-            'write_timeout': 60
-        }
+        'echo': False
     }
     
     # Paynow settings

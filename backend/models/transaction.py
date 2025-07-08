@@ -7,14 +7,14 @@ from utils.database import db
 
 class Transaction(db.Model):
     """Database model for storing payment transactions."""
-    __tablename__ = 'transactions'
+    __tablename__ = 'mg_transactions'
     
     # Primary key
     id = db.Column(db.Integer, primary_key=True)
     
     # Foreign keys for loan relationships
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
-    loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('mg_users.id'), nullable=True, index=True)
+    loan_id = db.Column(db.Integer, db.ForeignKey('mg_loans.id'), nullable=True, index=True)
       # Basic transaction info
     reference = db.Column(db.String(100), unique=True, nullable=False, index=True)
     phone_number = db.Column(db.String(20), nullable=False)
@@ -75,15 +75,20 @@ class Transaction(db.Model):
         return f"{random_prefix}sl00a.{timestamp}.{loan_ref}"
     def to_dict(self):
         """Convert transaction to dictionary."""
+        amount = float(self.amount) if self.amount else 0.00
+        
         return {
             'id': self.id,
+            'transaction_id': self.reference,  # Frontend expects transaction_id
             'reference': self.reference,
             'user_id': self.user_id,
             'loan_id': self.loan_id,
             'loan_reference': self.loan.loan_id if hasattr(self, 'loan') and self.loan else None,
             'customer_name': self.user.full_name if hasattr(self, 'user') and self.user else 'Unknown',
             'phone_number': self.phone_number,
-            'amount': self.amount,
+            'amount': amount,
+            'fee': 0.00,  # Always 0 for simplicity
+            'total': amount,  # Total = amount since fee is always 0
             'method': self.method,
             'transaction_type': self.transaction_type,
             'poll_url': self.poll_url,

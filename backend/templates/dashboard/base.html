@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
     <title>{% block title %}Admin Dashboard{% endblock %} - LoanPay</title>
     
     <!-- Bootstrap CSS -->
@@ -141,17 +142,23 @@
                         <i class="fas fa-coins"></i> LoanPay Admin
                     </h4>
                     <nav class="nav flex-column">
-                        <a class="nav-link active" href="#dashboard" data-section="dashboard">
-                            <i class="fas fa-chart-line me-2"></i> Dashboard
+                        <a class="nav-link active" href="#overview" data-tab="overview">
+                            <i class="fas fa-chart-pie me-2"></i> Overview
                         </a>
-                        <a class="nav-link" href="#transactions" data-section="transactions">
-                            <i class="fas fa-receipt me-2"></i> Transactions
+                        <a class="nav-link" href="#users" data-tab="users">
+                            <i class="fas fa-users me-2"></i> Users
                         </a>
-                        <a class="nav-link" href="#analytics" data-section="analytics">
-                            <i class="fas fa-chart-bar me-2"></i> Analytics
+                        <a class="nav-link" href="#loans" data-tab="loans">
+                            <i class="fas fa-hand-holding-usd me-2"></i> Loans
                         </a>
-                        <a class="nav-link" href="#system" data-section="system">
-                            <i class="fas fa-cog me-2"></i> System Health
+                        <a class="nav-link" href="#transactions" data-tab="transactions">
+                            <i class="fas fa-money-bill-wave me-2"></i> Transactions
+                        </a>
+                        <a class="nav-link" href="#analytics" data-tab="analytics">
+                            <i class="fas fa-chart-line me-2"></i> Analytics
+                        </a>
+                        <a class="nav-link" href="#security" data-tab="security">
+                            <i class="fas fa-shield-alt me-2"></i> Security
                         </a>
                     </nav>
                     
@@ -179,6 +186,106 @@
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // CSRF Token handling
+        let CSRF_TOKEN = '';
+        
+        // Try to get CSRF token from meta tag first, then from template variable
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta) {
+            CSRF_TOKEN = csrfMeta.getAttribute('content');
+        } else if (typeof window.csrf_token !== 'undefined') {
+            CSRF_TOKEN = window.csrf_token;
+        }
+        
+        // Set up CSRF token for all AJAX requests
+        if (CSRF_TOKEN) {
+            // For jQuery if available
+            if (typeof $ !== 'undefined') {
+                $.ajaxSetup({
+                    beforeSend: function(xhr, settings) {
+                        if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                            xhr.setRequestHeader("X-CSRFToken", CSRF_TOKEN);
+                        }
+                    }
+                });
+            }
+            
+            // For fetch API
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const [url, options = {}] = args;
+                if (options.method && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(options.method.toUpperCase())) {
+                    options.headers = options.headers || {};
+                    options.headers['X-CSRFToken'] = CSRF_TOKEN;
+                }
+                return originalFetch.apply(this, [url, options]);
+            };
+        }
+        
+        // Sidebar navigation
+        function initializeSidebarNavigation() {
+            const navLinks = document.querySelectorAll('.sidebar .nav-link[data-tab]');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Remove active class from all links
+                    navLinks.forEach(l => l.classList.remove('active'));
+                    
+                    // Add active class to clicked link
+                    this.classList.add('active');
+                    
+                    // Get target tab
+                    const targetTab = this.getAttribute('data-tab');
+                    
+                    // Trigger tab switch if the function exists
+                    if (typeof switchTab === 'function') {
+                        switchTab(targetTab);
+                    }
+                    
+                    // Update URL hash
+                    window.location.hash = targetTab;
+                });
+            });
+            
+            // Handle initial hash
+            const hash = window.location.hash.substr(1);
+            if (hash) {
+                const targetLink = document.querySelector(`.sidebar .nav-link[data-tab="${hash}"]`);
+                if (targetLink) {
+                    targetLink.click();
+                }
+            } else {
+                // Default to overview
+                const overviewLink = document.querySelector('.sidebar .nav-link[data-tab="overview"]');
+                if (overviewLink) {
+                    overviewLink.classList.add('active');
+                }
+            }
+        }
+        
+        // Logout function
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                window.location.href = '/auth/logout';
+            }
+        }
+        
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSidebarNavigation();
+            
+            // Load current user info if function exists
+            if (typeof loadCurrentUser === 'function') {
+                loadCurrentUser();
+            }
+        });
+        
+        console.log('Base template loaded. CSRF Token available:', !!CSRF_TOKEN);
+    </script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 </html>
