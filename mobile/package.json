@@ -4,8 +4,8 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "build:android": "eas build --platform android",
     "prebuild": "expo prebuild --platform android --clean",
@@ -13,14 +13,16 @@
     "build:apk:debug": "npm run prebuild && cd android && gradlew.bat assembleDebug",
     "build:apk:release": "npm run prebuild && cd android && gradlew.bat assembleRelease",
     "build:aab": "npm run prebuild && cd android && gradlew.bat bundleRelease"
-  },  "dependencies": {
+  },
+  "dependencies": {
     "axios": "^1.6.0",
     "babel-preset-expo": "^13.2.1",
     "expo": "~53.0.0",
     "expo-status-bar": "~1.12.1",
     "react": "18.3.1",
     "react-native": "0.76.5"
-  },  "devDependencies": {
+  },
+  "devDependencies": {
     "@babel/core": "^7.20.0",
     "@expo/cli": "^0.27.0"
   },
