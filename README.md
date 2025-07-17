@@ -110,9 +110,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🆘 Support
 
-For support, email support@example.com or create an issue in this repository.
+For support, create an issue in this repository.
 
-## 🙏 Acknowledgments
+## Tools
 
 - [Paynow Zimbabwe](https://paynow.co.zw) for payment processing
 - [Expo](https://expo.dev) for React Native development
