@@ -146,15 +146,8 @@ async function initializeDatabase() {
   }
 }
 
-async function main() {
-  console.log('This will initialize/reset your database with the correct schema.');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  rl.question('Continue? (y/N): ', async (answer) => {
-    rl.close();
-    if (answer.toLowerCase() !== 'y') {
-      console.log('❌ Initialization cancelled');
-      process.exit(1);
-    }
+if (require.main === module) {
+  (async () => {
     const success = await initializeDatabase();
     if (success) {
       console.log('\n🎉 Database ready! You can now run your loan management system.');
@@ -163,9 +156,5 @@ async function main() {
       console.log('\n❌ Please check the errors above and try again.');
       process.exit(1);
     }
-  });
-}
-
-if (require.main === module) {
-  main();
+  })();
 }
