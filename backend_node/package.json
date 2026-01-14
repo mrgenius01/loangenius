@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:init": "node src/init_database.js"
   },
   "author": "",
   "license": "MIT",
