@@ -182,6 +182,35 @@ Some payment methods (e.g. OMARI, Innbucks) require additional steps such as OTP
 
 ---
 
+## Transaction Status Polling & Update
+
+**GET** `/transaction/status?pollUrl=...`
+
+- Polls Paynow for the latest payment status using the provided `pollUrl`.
+- On every poll, the backend:
+  - Calls Paynow to get the latest status.
+  - Updates the transaction's `status` field in the database (e.g. `pending`, `paid`, `failed`).
+  - Returns the updated transaction and Paynow status.
+- If status is `paid`, you can (in future) deduct the amount from the related loan.
+
+**Response:**
+```
+{
+  "transaction": { ... },
+  "paynowStatus": { ... }
+}
+```
+
+---
+
+## Implementation Notes
+- Transaction creation stores all Paynow details (status, reference, pollUrl, instructions, error) in the database.
+- Status polling endpoint updates the transaction status in the database on every poll.
+- Future: After a successful payment (`status: paid`), deduct the amount from the loan balance.
+- All errors are handled gracefully and returned in a standard format.
+
+---
+
 ## Error Handling
 - All endpoints return errors in the format:
 ```
