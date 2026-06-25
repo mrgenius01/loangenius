@@ -13,6 +13,7 @@ async function payNowMobile({ reference, amount, phone_number, method, email }) 
   payment.add('Loan Repayment', amount);
   try {
     const response = await paynow.sendMobile(payment, phone_number, method);
+    console.log('[PayNow] Payment Response omari***:', response);
     return response;
   } catch (err) {
     console.error('[PayNow] Error:', err);

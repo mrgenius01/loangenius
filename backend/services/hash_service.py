@@ -16,10 +16,11 @@ def generate_paynow_hash(items, integration_key):
         if str(key).lower() == 'hash':
             continue
         out += str(value)
-    
     out += integration_key.lower()
-    
-    return hashlib.sha512(out.encode('utf-8')).hexdigest().upper()
+    print(f"[DEBUG] Paynow hash input string: '{out}'")  # Debug: print the string being hashed
+    hash_result = hashlib.sha512(out.encode('utf-8')).hexdigest().upper()
+    print(f"[DEBUG] Paynow hash output: '{hash_result}'")  # Debug: print the resulting hash
+    return hash_result
 
 class HashService:
     """Service class for hash generation operations."""

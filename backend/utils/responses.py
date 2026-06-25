@@ -32,7 +32,7 @@ class APIResponse:
         return jsonify(response), status_code
     
     @staticmethod
-    def error(message="An error occurred", errors=None, status_code=400, error_code=None):
+    def error(message="An error occurred", errors=None, status_code=400, error_code=None, **kwargs):
         """Create an error response.
         
         Args:
@@ -49,13 +49,13 @@ class APIResponse:
             "message": message,
             "timestamp": datetime.now().isoformat()
         }
-        
         if errors:
             response["errors"] = errors if isinstance(errors, list) else [errors]
-        
         if error_code:
             response["error_code"] = error_code
-        
+        # Add any extra fields (e.g., debug_info)
+        for k, v in kwargs.items():
+            response[k] = v
         return jsonify(response), status_code
     
     @staticmethod
